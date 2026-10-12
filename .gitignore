@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+.runtime/
+media-cache/
 .pnpm-store/
 .pnpm-debug.log*
 npm-debug.log*

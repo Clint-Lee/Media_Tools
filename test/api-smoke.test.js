@@ -1,211 +1,74 @@
 'use strict';
-
 const assert = require('node:assert/strict');
+const fs = require('fs'), os = require('os'), path = require('path');
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hotpot-api-test-'));
+process.env.HOTPOT_DB_FILE = path.join(directory, 'accounts.json');
+process.env.HOTPOT_MEDIA_CACHE = path.join(directory, 'media');
+const sources = require('../lib/live-sources');
+const jobs = require('../lib/media-jobs');
+const calls = [];
+const now = Math.floor(Date.now() / 1000);
+sources.getVideos = async options => {
+    calls.push(options);
+    if (options.query === 'source-failure') throw new Error('真实源不可用');
+    return { source: 'test:verified-fixture', message: '隔离测试数据', hasMore: true, nextCursor: 'real-next', scope: { exhaustive: false, metric: 'views' }, coverage: { candidates: 2, unique: 2 }, list: [
+        { id:'BVtest2', title:'上海技术视频', platform:'bilibili', playRaw:12345, metricRaw:12345, pubdate:now, cover:'https://example.com/real.jpg' },
+        { id:'BVtest1', title:'东京技术视频', platform:'bilibili', playRaw:12, metricRaw:12, pubdate:now }
+    ] };
+};
+sources.getTopics = async () => ({ source:'test:official-topic', message:'原始排名', list:[
+    { id:'topic1', title:'科技热点', rank:2, heatRaw:123456, heatDisplay:'12.3万', worksCount:null }
+] });
 const app = require('../server');
-
-async function run() {
-    const server = app.listen(0);
-    await new Promise(resolve => server.once('listening', resolve));
-    const { port } = server.address();
-
+(async () => {
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise(r => server.once('listening', r));
+    const base = 'http://127.0.0.1:' + server.address().port;
+    let cookie = '';
+    const get = async url => { const r = await fetch(base + url, { headers: { Cookie: cookie } }); return { status:r.status, data:await r.json() }; };
     try {
-        // 1. Settings test
-        const settingsResponse = await fetch(`http://127.0.0.1:${port}/api/settings`);
-        const settings = await settingsResponse.json();
-        assert.equal(settingsResponse.status, 200);
-        assert.equal(settings.success, true);
-
-        // 2. Invalid platform test
-        const invalidResponse = await fetch(`http://127.0.0.1:${port}/api/trends?platform=invalid&category=all&timeRange=7days`);
-        assert.equal(invalidResponse.status, 400);
-
-        // 3. Static assets
-        const globeBundle = await fetch(`http://127.0.0.1:${port}/vendor/globe.gl.min.js`, { method: 'HEAD' });
-        const globeTexture = await fetch(`http://127.0.0.1:${port}/vendor/earth-blue-marble.jpg`, { method: 'HEAD' });
-        const globeTopology = await fetch(`http://127.0.0.1:${port}/vendor/earth-topology.png`, { method: 'HEAD' });
-        assert.equal(globeBundle.status, 200);
-        assert.equal(globeTexture.status, 200);
-        assert.equal(globeTopology.status, 200);
-
-        // 4. Security checks
-        const blockedProxy = await fetch(`http://127.0.0.1:${port}/api/proxy-image?url=${encodeURIComponent('http://127.0.0.1/private')}`);
-        assert.equal(blockedProxy.status, 400);
-
-        // 5. Test Topic Leaderboard and Drilldown API
-        const topicsResponse = await fetch(`http://127.0.0.1:${port}/api/topics?platform=douyin&category=all`);
-        assert.equal(topicsResponse.status, 200);
-        const topicsData = await topicsResponse.json();
-        assert.equal(topicsData.success, true);
-        assert.ok(Array.isArray(topicsData.list) && topicsData.list.length >= 5, 'Should return topic leaderboard items');
-        
-        // Assert top topic
-        const topTopic = topicsData.list[0];
-        assert.ok(topTopic.title && topTopic.title.length > 0, 'Top topic must have title');
-        assert.ok(topTopic.heatRaw >= 100000000, 'Top topic should have significant heat');
-        assert.ok(topTopic.heatDisplay.includes('亿') || topTopic.heatDisplay.includes('万'), 'Topic heat must be formatted');
-
-        // Test Topic Drilldown
-        const topicVideosRes = await fetch(`http://127.0.0.1:${port}/api/search-topic?query=${encodeURIComponent(topTopic.title)}&topicId=${topTopic.id}`);
-        assert.equal(topicVideosRes.status, 200);
-        const topicVideosData = await topicVideosRes.json();
-        assert.equal(topicVideosData.success, true);
-        assert.ok(Array.isArray(topicVideosData.list) && topicVideosData.list.length > 0, 'Topic drilldown should return related videos');
-        
-        // Verify videos are sorted by playRaw descending
-        for (let i = 0; i < topicVideosData.list.length - 1; i++) {
-            assert.ok(
-                (topicVideosData.list[i].playRaw || 0) >= (topicVideosData.list[i + 1].playRaw || 0),
-                'Topic videos must be sorted from highest to lowest playback'
-            );
+        assert.equal((await get('/api/auth/me')).status, 401);
+        const registration = await fetch(base + '/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:'real_api_test',password:'Test-password-123456'}) });
+        assert.equal(registration.status,200); cookie = registration.headers.get('set-cookie').split(';')[0];
+        assert.equal((await get('/api/settings')).status, 200);
+        for (const url of ['/api/trends?platform=invalid', '/api/trends?category=invalid', '/api/trends?timeRange=invalid'])
+            assert.equal((await get(url)).status, 400);
+        const r = await get('/api/search?platform=bilibili&category=tech&timeRange=3days&query=AI');
+        assert.equal(r.status, 200); assert.equal(r.data.success, true);
+        assert.equal(calls.at(-1).timeRange, '3days'); assert.equal(calls.at(-1).category, 'tech'); assert.equal(calls.at(-1).query, 'AI');
+        assert.equal(r.data.list[0].playRaw, 12345);
+        assert.equal(r.data.scope.exhaustive, false); assert.equal(r.data.nextCursor, 'real-next');
+        assert.equal(r.data.hasMore, true); assert.equal(r.data.coverage.candidates, 2);
+        await get('/api/search?platform=bilibili&query=AI&page=2&cursor=next');
+        assert.equal(calls.at(-1).page, 2); assert.equal(calls.at(-1).cursor, 'next');
+        assert.equal((await get('/api/platforms')).data.list.length, 7);
+        const topic = await get('/api/topics?platform=douyin&timeRange=7days');
+        assert.equal(topic.data.list[0].rank, 2, '保留平台原始排名');
+        assert.equal(topic.data.list[0].heatRaw, 123456, '热度不能乘倍数');
+        assert.equal(topic.data.timeRangeApplied, false, '话题榜不是发布时间视频榜');
+        await get('/api/search-topic?platform=bilibili&category=tech&timeRange=3days&query=手机');
+        assert.equal(calls.at(-1).query, '手机'); assert.equal(calls.at(-1).timeRange, '3days');
+        const failed = await get('/api/search?query=source-failure');
+        assert.equal(failed.status, 502); assert.equal(failed.data.success, false);
+        assert.equal(failed.data.list.length, 0, '源失败不能返回固定素材');
+        const geo = await get('/api/geo-hotspots?platform=bilibili');
+        assert.equal(geo.data.sampleSize, 2);
+        assert.equal(geo.data.list.reduce((n,x) => n+x.count,0), 2);
+        for (const endpoint of ['/api/analyze', '/api/transcript']) {
+            const response = await fetch(base + endpoint, { method:'POST', headers:{'Content-Type':'application/json',Cookie:cookie}, body:JSON.stringify({title:'伪造字幕测试'}) });
+            assert.equal(response.status, 400, '只有标题的请求不能生成字幕');
         }
-
-        // 6. Test Danmaku API (Authentic danmaku parsing)
-        const danmakuRes = await fetch(`http://127.0.0.1:${port}/api/danmaku?bvid=BV1bW411n7fY`);
-        assert.equal(danmakuRes.status, 200);
-        const danmakuData = await danmakuRes.json();
-        assert.equal(danmakuData.success, true);
-        assert.ok(danmakuData.count > 0, 'Danmaku count should be greater than 0');
-        assert.ok(Array.isArray(danmakuData.list), 'Danmaku list should be an array');
-        assert.ok(danmakuData.list[0].text, 'Danmaku item must have text');
-        assert.ok(typeof danmakuData.list[0].time === 'number', 'Danmaku item must have time');
-        assert.ok(danmakuData.list[0].color, 'Danmaku item must have color');
-
-        // 7. Test MediaTools Universal Extraction (/api/parse & /api/analyze & /api/download)
-        const parseRes = await fetch(`http://127.0.0.1:${port}/api/parse`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: 'https://www.bilibili.com/video/BV1bW411n7fY' })
-        });
-        assert.equal(parseRes.status, 200);
-        const parseData = await parseRes.json();
-        assert.equal(parseData.success, true);
-        assert.ok(parseData.videoUrl, 'Parsed video should have playable stream URL');
-        assert.ok(parseData.title, 'Parsed video should have title');
-
-        const title = parseData.title;
-        const description = parseData.description;
-        const analyzeRes = await fetch(`http://127.0.0.1:${port}/api/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, description })
-        });
-        assert.equal(analyzeRes.status, 200);
-        const analyzeData = await analyzeRes.json();
-        assert.equal(analyzeData.success, true);
-        assert.ok(analyzeData.category, 'AI should classify video category');
-        assert.ok(Array.isArray(analyzeData.goldenHooks) && analyzeData.goldenHooks.length >= 3, 'AI should return 3 golden hooks');
-        assert.ok(Array.isArray(analyzeData.storyboardSuggestions) && analyzeData.storyboardSuggestions.length >= 3, 'AI should return storyboard suggestions');
-
-        // 7.1 Test Transcript Extraction (/api/transcript)
-        const transcriptRes = await fetch(`http://127.0.0.1:${port}/api/transcript`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, description, duration: 30 })
-        });
-        assert.equal(transcriptRes.status, 200);
-        const transcriptData = await transcriptRes.json();
-        assert.equal(transcriptData.success, true);
-        assert.ok(Array.isArray(transcriptData.transcript) && transcriptData.transcript.length >= 3, 'Should generate structured transcript lines');
-        assert.ok(transcriptData.srtContent.includes('-->'), 'Should generate standard SRT formatted subtitles');
-        assert.ok(transcriptData.fullText && transcriptData.plainText, 'Should provide full plain text transcript');
-
-        // 7.2 Test Complex Douyin Share Text extraction
-        const douyinShareText = '2.02 L@J.Vy Agb:/ :0pm 06/11 “谎言不会伤人、真像才是快刀！” # 兔娘# 婚姻# 彩礼# inmyfeelings# 创作者扶持计划  https://v.douyin.com/E-4whck_rfQ/ 复制此链接，打开Dou音搜索，直接观看视频！';
-        const douyinParseRes = await fetch(`http://127.0.0.1:${port}/api/parse`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: douyinShareText })
-        });
-        assert.equal(douyinParseRes.status, 200);
-        const douyinData = await douyinParseRes.json();
-        assert.equal(douyinData.success, true);
-        assert.equal(douyinData.platform, 'Douyin');
-        assert.ok(douyinData.videoUrl && douyinData.videoUrl.length > 0, 'Douyin parsed video must have direct stream URL');
-        assert.ok(douyinData.title && douyinData.title.length > 0, 'Douyin parsed video must have title');
-        assert.ok(douyinData.originUrl.includes('douyin.com/video/'), 'Douyin originUrl must be direct video post link');
-        assert.ok(douyinData.transcript && douyinData.transcript.transcript.length >= 3, 'Douyin parser should attach transcript');
-        assert.ok(douyinData.aiAnalysis && douyinData.aiAnalysis.goldenHooks.length >= 3, 'Douyin parser should attach AI analysis');
-
-        // 7.2 Test Download Endpoint (/api/download)
-        const downloadRes = await fetch(`http://127.0.0.1:${port}/api/download?videoUrl=${encodeURIComponent(douyinData.videoUrl)}&title=${encodeURIComponent(douyinData.title)}`, {
-            method: 'HEAD'
-        });
-        assert.equal(downloadRes.status, 200);
-        assert.ok(downloadRes.headers.get('content-disposition')?.includes('attachment'), 'Download endpoint must set attachment disposition');
-
-        // 8. Test Geo Hotspots (no 1000 capping)
-        const geoRes = await fetch(`http://127.0.0.1:${port}/api/geo-hotspots?platform=bilibili`);
-        assert.equal(geoRes.status, 200);
-        const geoData = await geoRes.json();
-        assert.equal(geoData.success, true);
-        assert.ok(Array.isArray(geoData.list) || Array.isArray(geoData.hotspots));
-
-        // 9. Test all 7 platforms for trends & expanded categories
-        const platforms = ['bilibili', 'douyin', 'youtube', 'tiktok', 'twitter', 'xiaohongshu', 'kuaishou'];
-        const categories = ['all', 'comedy', 'ent', 'fashion', 'pets', 'wildlife', 'tech', 'marketing', 'kuso', 'animal'];
-
-        for (const platform of platforms) {
-            // Test default 'all' category
-            const resAll = await fetch(`http://127.0.0.1:${port}/api/trends?platform=${platform}&category=all&timeRange=all`);
-            assert.equal(resAll.status, 200, `Platform ${platform} all category failed`);
-            const dataAll = await resAll.json();
-            assert.equal(dataAll.success, true);
-            assert.ok(Array.isArray(dataAll.list), `${platform} should return a list array`);
-            assert.ok(dataAll.list.length >= 15, `${platform} all list should have at least 15 items, got: ${dataAll.list.length}`);
-
-            const topAllHeat = dataAll.list[0]?.playRaw || 0;
-
-            // Single video items must have substantial heat (>= 1000万)
-            assert.ok(topAllHeat >= 10000000, `${platform} top heat must be >= 1000万, got: ${topAllHeat} (${dataAll.list[0]?.playCount})`);
-
-            // Verify items have required properties, authentic video URLs (never search URLs), and Chinese play counts
-            for (const item of dataAll.list) {
-                assert.ok(item.title, `Item on ${platform} must have title`);
-                assert.ok(item.url, `Item on ${platform} must have url`);
-                assert.ok(!item.url.includes('/search'), `Single video on ${platform} must NOT be a search URL, got: ${item.url}`);
-                assert.ok(item.cover, `Item on ${platform} must have cover`);
-                assert.ok(typeof item.playCount === 'string', `${platform} item must have playCount string`);
-                assert.ok(!/[kmb]\s*views?/i.test(item.playCount), `playCount on ${platform} should be Chinese format, got: ${item.playCount}`);
-            }
-
-            // Test subcategories and time filtering
-            for (const category of categories.slice(1)) {
-                const resCat = await fetch(`http://127.0.0.1:${port}/api/trends?platform=${platform}&category=${category}&timeRange=all`);
-                assert.equal(resCat.status, 200, `Platform ${platform} category ${category} failed`);
-                const dataCat = await resCat.json();
-                assert.equal(dataCat.success, true);
-                assert.ok(Array.isArray(dataCat.list));
-                assert.ok(dataCat.list.length >= 10, `${platform} ${category} should have >= 10 items, got ${dataCat.list.length}`);
-
-                const topCatHeat = dataCat.list[0]?.playRaw || 0;
-                assert.ok(
-                    topAllHeat >= topCatHeat,
-                    `Platform ${platform}: 'all' top heat (${topAllHeat}) must be >= '${category}' top heat (${topCatHeat})`
-                );
-
-                const resCat7d = await fetch(`http://127.0.0.1:${port}/api/trends?platform=${platform}&category=${category}&timeRange=7days`);
-                assert.equal(resCat7d.status, 200);
-                const dataCat7d = await resCat7d.json();
-                assert.equal(dataCat7d.success, true);
-                assert.ok(dataCat7d.list.length >= 5, `${platform} ${category} 7days should have abundant items, got ${dataCat7d.list.length}`);
-            }
-
-            // Test search endpoint with multi-page support
-            const resSearch = await fetch(`http://127.0.0.1:${port}/api/search?platform=${platform}&query=${encodeURIComponent('热门')}&category=all&timeRange=all&page=1`);
-            assert.equal(resSearch.status, 200, `Search on platform ${platform} failed`);
-            const dataSearch = await resSearch.json();
-            assert.equal(dataSearch.success, true);
-            assert.ok(Array.isArray(dataSearch.list));
-            assert.ok(dataSearch.list.length >= 15, `Search on ${platform} should return >= 15 items, got: ${dataSearch.list.length}`);
-        }
-
-        console.log('All 7 platforms, topic leaderboards, drill-down endpoints, and categories smoke tests passed successfully!');
-    } finally {
-        await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-    }
-}
-
-run().catch(error => {
-    console.error('Smoke test failure:', error);
-    process.exitCode = 1;
-});
+        const invalid = await fetch(base + '/api/media/jobs', { method:'POST', headers:{'Content-Type':'application/json',Cookie:cookie}, body:JSON.stringify({url:'http://127.0.0.1/private'}) });
+        assert.equal(invalid.status,400);
+        assert.equal((await get('/api/media/jobs/not-a-job')).status,404);
+        const blocked = await fetch(base + '/api/proxy-image?url=' + encodeURIComponent('http://127.0.0.1/private'));
+        assert.equal(blocked.status,400);
+        assert.equal(app.resolveMediaExtension('audio/aac', 'song'), '.aac');
+        assert.equal(app.resolveMediaExtension('audio/mp4', 'track'), '.m4a');
+        assert.equal(app.resolveMediaExtension('video/webm', 'clip'), '.webm');
+        assert.equal(app.resolveMediaExtension('video/mp4', 'movie.mp4'), '');
+        assert.equal(app.resolveMediaExtension('audio/mpeg', 'tune.mp3'), '');
+        for (const asset of ['/cover-placeholder.svg','/vendor/globe.gl.min.js','/vendor/earth-blue-marble.jpg']) assert.equal((await fetch(base+asset,{method:'HEAD'})).status,200);
+        console.log('api-smoke tests passed (no network dependencies)');
+    } finally { jobs.shutdown(); await sources.closeBrowser(); await new Promise(r => server.close(r)); fs.rmSync(directory, { recursive:true, force:true }); }
+})().catch(error => {console.error(error);process.exitCode=1;});

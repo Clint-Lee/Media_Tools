@@ -14,12 +14,12 @@ document.addEventListener('DOMContentLoaded', () => {
         metricMode: 'single', // 'single' (单视频热度) | 'topic' (全网话题事件热度)
         view: 'feed',         // 'feed' | 'globe'
         currentTopic: null,   // active topic in drilldown
-        
+
         // Single Video Feed Data
         allVideos: [],
         displayedVideos: [],
         activeVideo: null,
-        
+
         // Topic Feed Data
         topicsList: [],
 
@@ -32,7 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Infinite Scroll
         page: 1,
-        pageSize: 16,
+        pageSize: 30,
+        remotePage: 1,
+        remoteHasMore: false,
+        nextCursor: '',
+        requestSequence: 0,
+        feedAbort: null,
         isLoading: false,
         hasMore: true
     };
@@ -61,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gridScrollArea: document.getElementById('grid-scroll-area'),
         cardsGrid: document.getElementById('cards-grid'),
         topicsGrid: document.getElementById('topics-grid'),
-        
+
         // Topic Drilldown View
         topicDrilldownView: document.getElementById('topic-drilldown-view'),
         btnBackToTopics: document.getElementById('btn-back-to-topics'),
@@ -127,92 +132,152 @@ document.addEventListener('DOMContentLoaded', () => {
         modalSniffBtn: document.getElementById('modal-sniff-btn'),
         modalDownloadBtn: document.getElementById('modal-download-btn'),
 
-        // MediaTools Workbench DOM
+        // Galaxy Downloader Workbench DOM
         mediatoolsView: document.getElementById('mediatools-view'),
         btnNavMediatools: document.getElementById('btn-nav-mediatools'),
-        mtRoleBadge: document.getElementById('mt-role-badge'),
-        mtQuotaCount: document.getElementById('mt-quota-count'),
-        mtQuickRoleBtn: document.getElementById('mt-quick-role-btn'),
-        mtOpenLogsBtn: document.getElementById('mt-open-logs-btn'),
         mtInputUrl: document.getElementById('mt-input-url'),
         mtPasteBtn: document.getElementById('mt-paste-btn'),
         mtClearBtn: document.getElementById('mt-clear-btn'),
         mtExtractBtn: document.getElementById('mt-extract-btn'),
         mtLoadingState: document.getElementById('mt-loading-state'),
         mtLoadingStep: document.getElementById('mt-loading-step'),
-        mtResultsGrid: document.getElementById('mt-results-grid'),
+        mtErrorBox: document.getElementById('mt-error-box'),
+        mtErrorMsg: document.getElementById('mt-error-msg'),
+        mtResultsContainer: document.getElementById('mt-results-container'),
+        mtPanelVideo: document.getElementById('mt-panel-video'),
         mtResPlatform: document.getElementById('mt-res-platform'),
         mtResTitle: document.getElementById('mt-res-title'),
         mtResAuthor: document.getElementById('mt-res-author'),
-        mtResQuality: document.getElementById('mt-res-quality'),
         mtResDuration: document.getElementById('mt-res-duration'),
         mtResOriginLink: document.getElementById('mt-res-origin-link'),
+        mtBtnCloseResult: document.getElementById('mt-btn-close-result'),
         mtNativeVideo: document.getElementById('mt-native-video'),
+        mtPagesWrapper: document.getElementById('mt-pages-wrapper'),
+        mtPagesCount: document.getElementById('mt-pages-count'),
+        mtPagesList: document.getElementById('mt-pages-list'),
         mtBtnDownloadMp4: document.getElementById('mt-btn-download-mp4'),
+        mtBtnDownloadMp3: document.getElementById('mt-btn-download-mp3'),
         mtBtnCopyStream: document.getElementById('mt-btn-copy-stream'),
-        mtBtnAnalyzeAgain: document.getElementById('mt-btn-analyze-again'),
+        mtPanelImage: document.getElementById('mt-panel-image'),
+        mtImgTitle: document.getElementById('mt-img-title'),
+        mtImgCount: document.getElementById('mt-img-count'),
+        mtBtnDownloadAllZip: document.getElementById('mt-btn-download-all-zip'),
+        mtBtnDownloadBgm: document.getElementById('mt-btn-download-bgm'),
+        mtImageGallery: document.getElementById('mt-image-gallery'),
+        mtPanelAudio: document.getElementById('mt-panel-audio'),
+        mtAudioTitle: document.getElementById('mt-audio-title'),
+        mtNativeAudio: document.getElementById('mt-native-audio'),
+        mtBtnDownloadAudioFile: document.getElementById('mt-btn-download-audio-file'),
+        mtHistoryCount: document.getElementById('mt-history-count'),
+        mtBtnClearHistory: document.getElementById('mt-btn-clear-history'),
+        mtHistoryList: document.getElementById('mt-history-list'),
+        mtTodayTotalCount: document.getElementById('mt-today-total-count'),
+        mtTodayPlatforms: document.getElementById('mt-today-platforms'),
+        mtLightboxModal: document.getElementById('mt-lightbox-modal'),
+        mtLightboxClose: document.getElementById('mt-lightbox-close'),
+        mtLightboxImg: document.getElementById('mt-lightbox-img'),
+        mtLightboxTitle: document.getElementById('mt-lightbox-title'),
+        mtLightboxDownload: document.getElementById('mt-lightbox-download'),
+
+
+        // User Center Dropdown & Modals
+        userCenterWrapper: document.getElementById('user-center-wrapper'),
+        userCenterDropdown: document.getElementById('user-center-dropdown'),
+        dropdownUserAvatar: document.getElementById('dropdown-user-avatar'),
+        dropdownNickname: document.getElementById('dropdown-nickname'),
+        dropdownRoleBadge: document.getElementById('dropdown-role-badge'),
+        dropdownQuotaBadge: document.getElementById('dropdown-quota-badge'),
+        dropdownQuotaCount: document.getElementById('dropdown-quota-count'),
+        menuBtnProfile: document.getElementById('menu-btn-profile'),
+        menuBtnBenefits: document.getElementById('menu-btn-benefits'),
+        menuBtnHistory: document.getElementById('menu-btn-history'),
+        menuBtnSettings: document.getElementById('menu-btn-settings'),
+        menuBtnSwitchRole: document.getElementById('menu-btn-switch-role'),
+        menuBtnLogout: document.getElementById('menu-btn-logout'),
+
+        // Profile Modal
+        profileModal: document.getElementById('profile-modal'),
+        closeProfileModalBtn: document.getElementById('close-profile-modal-btn'),
+        profileUserAvatar: document.getElementById('profile-user-avatar'),
+        profileNickname: document.getElementById('profile-nickname'),
+        profileRoleBadge: document.getElementById('profile-role-badge'),
+        profileUsername: document.getElementById('profile-username'),
+        profileRegDate: document.getElementById('profile-reg-date'),
+        profileQuotaDisplay: document.getElementById('profile-quota-display'),
+        profileQuotaBar: document.getElementById('profile-quota-bar'),
+        btnProfileToBenefits: document.getElementById('btn-profile-to-benefits'),
+
+        // Benefits Modal
+        benefitsModal: document.getElementById('benefits-modal'),
+        closeBenefitsModalBtn: document.getElementById('close-benefits-modal-btn'),
+
+        // Settings Tabs & Language Grid
+        settingsTabBtns: document.querySelectorAll('.settings-tab-btn'),
+        setContentLanguage: document.getElementById('set-content-language'),
+        setContentProxy: document.getElementById('set-content-proxy'),
+        langCards: document.querySelectorAll('.lang-card'),
+
+        // Downloader Dual Tabs & Transcript / AI
+        mtTabBtns: document.querySelectorAll('.mt-tab-btn'),
+        mtPanelTranscript: document.getElementById('mt-panel-transcript'),
+        mtPanelAi: document.getElementById('mt-panel-ai'),
+        mtTranscriptCount: document.getElementById('mt-transcript-count'),
+        mtBtnCopyTranscript: document.getElementById('mt-btn-copy-transcript'),
+        mtBtnExportTxt: document.getElementById('mt-btn-export-txt'),
+        mtBtnExportSrt: document.getElementById('mt-btn-export-srt'),
+        mtTranscriptTimeline: document.getElementById('mt-transcript-timeline'),
         mtAiCategory: document.getElementById('mt-ai-category'),
         mtAiAudience: document.getElementById('mt-ai-audience'),
         mtAiTrigger: document.getElementById('mt-ai-trigger'),
         mtAiHooks: document.getElementById('mt-ai-hooks'),
         mtAiStoryboard: document.getElementById('mt-ai-storyboard'),
         mtAiRecommendations: document.getElementById('mt-ai-recommendations'),
-        mtTabBtns: document.querySelectorAll('.mt-tab-btn'),
-        mtPanelTranscript: document.getElementById('mt-panel-transcript'),
-        mtPanelAi: document.getElementById('mt-panel-ai'),
-        mtTranscriptCount: document.getElementById('mt-transcript-count'),
-        mtTranscriptTimeline: document.getElementById('mt-transcript-timeline'),
-        mtBtnCopyTranscript: document.getElementById('mt-btn-copy-transcript'),
-        mtBtnExportTxt: document.getElementById('mt-btn-export-txt'),
-        mtBtnExportSrt: document.getElementById('mt-btn-export-srt'),
 
-        // Settings Modal
-        settingsBtn: document.getElementById('settings-btn'),
-        settingsModal: document.getElementById('settings-modal'),
-        closeModalBtn: document.getElementById('close-modal-btn'),
-        settingProxy: document.getElementById('setting-proxy'),
-        btnSaveSettings: document.getElementById('btn-save-settings'),
-        proxyStatus: document.getElementById('proxy-status'),
-        proxyPills: document.querySelectorAll('.proxy-pill-btn'),
-
-        // Auth Modal & User UI
+        // User Identity & Header Bar
         userIdentityCard: document.getElementById('user-identity-card'),
         userLoggedInBox: document.getElementById('user-logged-in-box'),
-        userLoginTrigger: document.getElementById('user-login-trigger'),
-        openLoginBtn: document.getElementById('open-login-btn'),
-        authLogoutBtn: document.getElementById('auth-logout-btn'),
         userAvatar: document.getElementById('user-avatar'),
         userNickname: document.getElementById('user-nickname'),
         userRoleBadge: document.getElementById('user-role-badge'),
+        userLoginTrigger: document.getElementById('user-login-trigger'),
+        openLoginBtn: document.getElementById('open-login-btn'),
 
+        // Settings Modal & Preferences
+        settingsBtn: document.getElementById('settings-btn'),
+        settingsModal: document.getElementById('settings-modal'),
+        closeModalBtn: document.getElementById('close-modal-btn'),
+        btnSaveSettings: document.getElementById('btn-save-settings'),
+        settingProxy: document.getElementById('setting-proxy'),
+        proxyStatus: document.getElementById('proxy-status'),
+        proxyPills: document.querySelectorAll('.proxy-pill-btn, .proxy-pill'),
+
+        // Auth & Role Switching Modal
         authModal: document.getElementById('auth-modal'),
         closeAuthModalBtn: document.getElementById('close-auth-modal-btn'),
-        btnRoleAdmin: document.getElementById('btn-role-admin'),
-        btnRolePro: document.getElementById('btn-role-pro'),
-        btnRoleDemo: document.getElementById('btn-role-demo'),
-        authTabs: document.querySelectorAll('.auth-tab'),
+        authTabs: document.querySelectorAll('.auth-tab, .auth-tab-btn'),
         loginForm: document.getElementById('login-form'),
-        registerForm: document.getElementById('register-form'),
         loginUsername: document.getElementById('login-username'),
         loginPassword: document.getElementById('login-password'),
         loginMsgBox: document.getElementById('login-msg-box'),
+        registerForm: document.getElementById('register-form'),
         regUsername: document.getElementById('reg-username'),
         regNickname: document.getElementById('reg-nickname'),
         regPassword: document.getElementById('reg-password'),
         regMsgBox: document.getElementById('reg-msg-box'),
+        authLogoutBtn: document.getElementById('auth-logout-btn'),
 
         // Toast Container
         toastContainer: document.getElementById('toast-container')
     };
 
     const PLATFORM_CONFIG = {
-        bilibili:    { name: '哔哩哔哩', color: '#fb7299', glow: 'rgba(251,114,153,0.3)', badge: 'B站全站热门' },
-        douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '短视频风向标' },
-        youtube:     { name: 'YouTube', color: '#ff0033', glow: 'rgba(255,0,51,0.3)', badge: '全球顶流视频' },
-        tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '海外现象级趋势' },
-        twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '全球即时话题' },
-        xiaohongshu: { name: '小红书', color: '#ff2442', glow: 'rgba(255,36,66,0.3)', badge: '爆款生活笔记' },
-        kuaishou:    { name: '快手热门', color: '#ff5000', glow: 'rgba(255,80,0,0.3)', badge: '国民热度精选' }
+        bilibili:    { name: '哔哩哔哩', color: '#fb7299', glow: 'rgba(251,114,153,0.3)', badge: '官方榜单 / 高播放检索' },
+        douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '真实点赞 / 官方热搜' },
+        youtube:     { name: 'YouTube', color: '#ff0033', glow: 'rgba(255,0,51,0.3)', badge: '官方 API / 公开搜索' },
+        tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '真实搜索 · 地区/登录限制' },
+        twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '官方 API · 需授权' },
+        xiaohongshu: { name: '小红书', color: '#ff2442', glow: 'rgba(255,36,66,0.3)', badge: '视频搜索 · 真实点赞' },
+        kuaishou:    { name: '快手热门', color: '#ff5000', glow: 'rgba(255,80,0,0.3)', badge: '视频搜索 · 真实点赞' }
     };
 
     // ── High Performance Danmaku Engine (Authentic Multi-platform Parser) ──
@@ -286,13 +351,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.style.color = customColor;
                 el.style.textShadow = `0 0 8px ${customColor}80, 0 1px 3px rgba(0,0,0,0.9)`;
             }
-            
+
             const topPercent = Math.floor(Math.random() * 65) + 10;
             el.style.top = `${topPercent}%`;
-            
+
             const duration = Math.floor(Math.random() * 3) + (isUser ? 6 : 7);
             el.style.animationDuration = `${duration}s`;
-            
+
             if (!isUser && !customColor) {
                 const styles = ['hot', 'cool', 'glow', ''];
                 const chosen = styles[Math.floor(Math.random() * styles.length)];
@@ -350,13 +415,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     .pointLng('lng')
                     .pointColor(d => d.color || (d.tier === 'high' ? '#ff2442' : (d.tier === 'medium' ? '#f59e0b' : (d.tier === 'normal' ? '#10b981' : '#06b6d4'))))
                     .pointAltitude(d => d.tier === 'high' ? 0.35 : (d.tier === 'medium' ? 0.22 : (d.tier === 'normal' ? 0.12 : 0.06)))
-                    .pointRadius(d => d.tier === 'high' ? 1.6 : (d.tier === 'medium' ? 1.2 : (d.tier === 'normal' ? 0.9 : 0.6)))
+                    .pointRadius(d => d.radius || 0.35)
                     .pointResolution(12)
                     .pointLabel(d => `
                         <div style="background: rgba(14,18,28,0.96); border: 1px solid ${d.color || '#38bdf8'}; border-radius: 8px; padding: 8px 12px; color: #fff; font-family: Outfit, sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.6);">
                             <div style="font-weight: 700; font-size: 13px; color: ${d.color || '#38bdf8'};">${d.city} · ${d.country}</div>
                             <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">关联作品: ${d.countDisplay || d.count + '篇'}</div>
-                            <div style="font-size: 10.5px; color: #4ade80;">综合传播: ${d.totalHeatDisplay || d.totalHeat + '热度'}</div>
+                            <div style="font-size: 10.5px; color: #4ade80;">当前样本中的地名关联，非作者所在地</div>
                         </div>
                     `)
                     .onPointClick((point) => {
@@ -365,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Set camera altitude (Center on China / East Asia initially)
                 this.globe.pointOfView({ lat: 31.2, lng: 115.5, altitude: 2.1 }, 1000);
-                
+
                 // Disable auto rotation per user directive
                 const controls = this.globe.controls();
                 if (controls) {
@@ -384,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.addEventListener('resize', this.resizeHandler);
 
                 this.isInitialized = true;
+                this.resizeHandler();
             } catch (err) {
                 console.error('[Globe] Initialization failed:', err);
             }
@@ -410,201 +476,200 @@ document.addEventListener('DOMContentLoaded', () => {
     const globeRadar = new GlobeRadarController();
 
     // ── Network & API Layer ─────────────────────────────────────────
-    async function fetchVideosApi(platform, category, timeRange, query = '') {
-        const queryParams = new URLSearchParams({
-            platform: platform || state.platform,
-            category: category || state.category,
-            timeRange: timeRange || state.timeRange
-        });
-        if (query) queryParams.set('query', query);
-
-        const endpoint = query ? `/api/search?${queryParams.toString()}` : `/api/trends?${queryParams.toString()}`;
-        const res = await fetch(endpoint);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+    async function readApi(url, options = {}) {
+        const response = await fetch(url, options);
+        const data = await response.json();
+        if (response.status === 401) { setUserSession(null); dom.authModal?.classList.remove('hidden'); }
+        if (!response.ok || data.success === false) throw new Error(data.message || data.error || '数据源暂不可用');
+        return data;
     }
 
-    async function fetchTopicsApi(platform, category, timeRange) {
-        const queryParams = new URLSearchParams({
-            platform: platform || state.platform,
-            category: category || state.category,
-            timeRange: timeRange || state.timeRange
-        });
-        const res = await fetch(`/api/topics?${queryParams.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+    function feedParams() {
+        return new URLSearchParams({ platform: state.platform, category: state.category, timeRange: state.timeRange, query: state.searchQuery });
     }
 
     async function fetchTopicVideosApi(topic) {
-        const queryParams = new URLSearchParams({
-            query: topic.title,
-            topicId: topic.id || '',
-            platform: state.platform
-        });
-        const res = await fetch(`/api/search-topic?${queryParams.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+        const params = feedParams();
+        params.set('query', topic.title);
+        return readApi('/api/search-topic?' + params);
     }
 
-    async function fetchGeoRadarApi() {
-        const queryParams = new URLSearchParams({
-            platform: state.platform,
-            category: state.category,
-            timeRange: state.timeRange
-        });
-        const res = await fetch(`/api/geo-hotspots?${queryParams.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-    }
+    async function fetchGeoRadarApi() { return readApi('/api/geo-hotspots?' + feedParams()); }
 
-    // ── Main Data Orchestrator ──────────────────────────────────────
-    async function loadData(reset = true) {
-        if (state.isLoading) return;
-        state.isLoading = true;
-
-        if (reset) {
-            state.page = 1;
-            state.hasMore = true;
-            state.allVideos = [];
-            state.displayedVideos = [];
-            state.topicsList = [];
-            state.currentTopic = null;
-
-            // UI Reset
-            dom.loader.classList.remove('hidden');
-            dom.emptyState.classList.add('hidden');
-            dom.cardsGrid.classList.add('hidden');
-            dom.topicsGrid.classList.add('hidden');
-            dom.topicDrilldownView.classList.add('hidden');
-            dom.endHint.classList.add('hidden');
-            dom.refreshBtn.classList.add('is-loading');
-        }
-
-        try {
-            if (state.metricMode === 'topic') {
-                // Topic Mode
-                await loadTopicLeaderboard();
-            } else {
-                // Single Video Mode
-                await loadSingleVideoList();
+    function showSourceCoverage(result, mode = state.metricMode) {
+        const scope = document.getElementById('ranking-scope');
+        if (scope) {
+            let sortLabel = '按播放量降序';
+            if (result.scope?.metric === 'heat' || result.scope?.label?.includes('热度')) {
+                sortLabel = '按官方热度降序';
+            } else if (result.scope?.metric === 'likes') {
+                sortLabel = '按点赞量降序';
             }
+            const label = result.scope?.label || '已获取作品';
+            const sortPart = label.includes(sortLabel) || label.includes('降序') ? '' : ' · ' + sortLabel;
+            scope.textContent = mode === 'topic' ? '平台官方实时话题排名 · 不是视频播放榜 · 发布时效用于关联视频'
+                : label + sortPart + ' · 不代表全站历史总榜';
+        }
+        const details = document.getElementById('source-details');
+        const content = document.getElementById('source-details-content');
+        if (details) details.classList.toggle('hidden', !result.coverage);
+        if (content && result.coverage) {
+            const c = result.coverage;
+            content.innerHTML = `<p>收到 ${Number(c.candidates || 0)} 条候选，本批去重并筛选后 ${Number(c.unique || 0)} 条。${c.detailsVerified != null ? '首屏详情再次核验 ' + Number(c.detailsVerified) + ' 条，未能再次核验 ' + Number(c.detailsFailed || 0) + ' 条。' : ''}${result.hasMore ? '继续滚动可获取更多搜索页。' : '本批数据源已读取完毕。'}排名仅适用于已获取作品。</p>`
+                + (c.sources || []).map(source => `<div class="source-check ${source.status === 'failed' ? 'source-check-failed' : ''}">${source.status === 'failed' ? '失败' : '已读取'} · ${escapeHtml(source.name)} · ${Number(source.count || 0)} 条${source.message ? ' · ' + escapeHtml(source.message) : ''}</div>`).join('');
+        }
+    }
 
-            // Sync Geo Radar in Background
-            loadGeoHotspots();
-        } catch (err) {
-            console.error('[App] Load data failed:', err);
-            showToast(`加载失败: ${err.message}`, 'error');
+    async function loadData(reset = true, forceRefresh = false) {
+        const sequence = ++state.requestSequence;
+        state.feedAbort?.abort();
+        state.feedAbort = new AbortController();
+        state.isLoading = true;
+        state.page = 1;
+        state.remotePage = 1;
+        state.remoteHasMore = false;
+        state.nextCursor = '';
+        state.hasMore = true;
+        state.allVideos = [];
+        state.displayedVideos = [];
+        state.topicsList = [];
+        state.currentTopic = null;
+        state.geoHotspots = [];
+        globeRadar.updatePoints([]);
+        dom.loader.classList.remove('hidden');
+        dom.emptyState.classList.add('hidden');
+        document.getElementById('btn-empty-topics')?.classList.add('hidden');
+        dom.cardsGrid.classList.add('hidden');
+        dom.topicsGrid.classList.add('hidden');
+        dom.topicDrilldownView.classList.add('hidden');
+        dom.endHint.classList.add('hidden');
+        dom.refreshBtn.classList.add('is-loading');
+        dom.infiniteLoader.classList.add('hidden');
+        document.getElementById('ranking-scope').textContent = '正在核验当前筛选的数据来源…';
+        document.getElementById('source-details').classList.add('hidden');
+        const params = feedParams();
+        params.set('refresh', forceRefresh ? '1' : '0');
+        const mode = state.metricMode;
+        const endpoint = mode === 'topic' ? '/api/topics?' : state.searchQuery ? '/api/search?' : '/api/trends?';
+        try {
+            const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
+            if (sequence !== state.requestSequence) return;
+            const list = result.list || [];
+            const status = document.getElementById('source-status');
+            if (status) status.textContent = (result.sourceMessage || '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + ' · 更新 ' + new Date(result.fetchedAt || Date.now()).toLocaleTimeString();
+            showSourceCoverage(result, mode);
+            if (!list.length) {
+                dom.emptyState.classList.remove('hidden');
+                dom.emptyState.querySelector('p').textContent = result.message || '当前筛选条件下没有可验证的数据，可扩大时效或切换分类。';
+                return;
+            }
+            if (mode === 'topic') {
+                state.topicsList = list;
+                renderTopicLeaderboard(list, dom.topicsGrid);
+                dom.topicsGrid.classList.remove('hidden');
+                dom.endHint.classList.remove('hidden');
+            } else {
+                state.allVideos = list;
+                state.remoteHasMore = Boolean(result.hasMore);
+                state.nextCursor = result.nextCursor || '';
+                state.pageSize = getResponsivePageSize();
+                state.page = 1;
+                state.displayedVideos = list.slice(0, state.pageSize);
+                renderVideoCards(state.displayedVideos, dom.cardsGrid);
+                dom.cardsGrid.classList.remove('hidden');
+                state.hasMore = list.length > state.pageSize || state.remoteHasMore;
+                dom.endHint.classList.toggle('hidden', state.hasMore);
+            }
+            if (state.view === 'globe') loadGeoHotspots(sequence);
+        } catch (error) {
+            if (error.name === 'AbortError' || sequence !== state.requestSequence) return;
             dom.emptyState.classList.remove('hidden');
+            dom.emptyState.querySelector('p').textContent = error.message;
+            document.getElementById('btn-empty-topics')?.classList.toggle('hidden', state.platform !== 'douyin' || mode === 'topic');
+            const status = document.getElementById('source-status');
+            if (status) status.textContent = '数据源暂不可用';
+            document.getElementById('ranking-scope').textContent = '未取得真实数据 · 不显示替代榜单';
         } finally {
-            state.isLoading = false;
-            dom.loader.classList.add('hidden');
-            dom.refreshBtn.classList.remove('is-loading');
+            if (sequence === state.requestSequence) {
+                state.isLoading = false;
+                dom.loader.classList.add('hidden');
+                dom.refreshBtn.classList.remove('is-loading');
+            }
         }
     }
 
     // ── Metric Mode 1: Single Video Feed ────────────────────────────
-    async function loadSingleVideoList() {
-        const result = await fetchVideosApi(state.platform, state.category, state.timeRange, state.searchQuery);
-        const list = result.list || [];
 
-        if (list.length === 0) {
-            dom.emptyState.classList.remove('hidden');
-            dom.cardsGrid.classList.add('hidden');
-            return;
+    function getSafeCoverUrl(video) {
+        if (!video || !video.cover || typeof video.cover !== 'string' || video.cover.trim().length === 0) {
+            return '/cover-placeholder.svg';
         }
+        let cov = video.cover.trim();
+        if (cov.startsWith('//')) cov = 'https:' + cov;
 
-        state.allVideos = list;
-        state.displayedVideos = list.slice(0, state.pageSize);
-        
-        renderVideoCards(state.displayedVideos, dom.cardsGrid);
-        dom.cardsGrid.classList.remove('hidden');
-
-        if (state.displayedVideos.length >= state.allVideos.length) {
-            dom.endHint.classList.remove('hidden');
+        const covLower = cov.toLowerCase();
+        // Route restricted CDNs through proxy-image to bypass referrer/hotlink blocks
+        if (
+            covLower.includes('douyin') ||
+            covLower.includes('byteimg') ||
+            covLower.includes('tos-cn-p-') ||
+            covLower.includes('p26-sign') ||
+            covLower.includes('p3-sign') ||
+            covLower.includes('p11-sign') ||
+            covLower.includes('p5-ex') ||
+            covLower.includes('hdslb.com') ||
+            covLower.includes('xhscdn.com') ||
+            covLower.includes('kwaicdn.com') ||
+            covLower.includes('yximgs.com')
+        ) {
+            return `/api/proxy-image?url=${encodeURIComponent(cov)}`;
         }
+        return cov;
     }
 
-    const CATEGORY_SAMPLE_COVERS = {
-        comedy: [
-            'https://images.unsplash.com/photo-1527224857830-43a7acc85260?q=80&w=700',
-            'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=700'
-        ],
-        ent: [
-            'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=700',
-            'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=700'
-        ],
-        fashion: [
-            'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=700',
-            'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=700'
-        ],
-        pets: [
-            'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?q=80&w=700',
-            'https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=700'
-        ],
-        wildlife: [
-            'https://images.unsplash.com/photo-1546182990-dffeafbe841d?q=80&w=700',
-            'https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=700'
-        ],
-        tech: [
-            'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=700',
-            'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=700'
-        ],
-        marketing: [
-            'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=700',
-            'https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=700'
-        ],
-        kuso: [
-            'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=700',
-            'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=700'
-        ]
-    };
 
-    function getSafeCoverUrl(video, index = 0) {
-        if (video.cover && typeof video.cover === 'string' && video.cover.startsWith('http')) {
-            return video.cover;
-        }
-        const cat = (state.category && state.category !== 'all') ? state.category : 'comedy';
-        const list = CATEGORY_SAMPLE_COVERS[cat] || CATEGORY_SAMPLE_COVERS.comedy;
-        return list[index % list.length];
-    }
-
-    function renderVideoCards(videos, containerEl) {
-        containerEl.innerHTML = '';
+    function renderVideoCards(videos, containerEl, append = false, rankOffset = 0) {
+        if (!append) containerEl.innerHTML = '';
         const fragment = document.createDocumentFragment();
 
         videos.forEach((video, index) => {
             const card = document.createElement('div');
             card.className = 'video-card';
-            
-            const rank = index + 1;
+            card.dataset.videoId = video.id;
+
+            const rank = rankOffset + index + 1;
             const rankClass = rank === 1 ? 'top-1' : (rank === 2 ? 'top-2' : (rank === 3 ? 'top-3' : ''));
             const rankIcon = rank === 1 ? '👑 #1' : (rank === 2 ? '🥈 #2' : (rank === 3 ? '🥉 #3' : `#${rank}`));
-            
-            const displayViews = video.playCount || formatHeat(video.playRaw || 0);
-            const coverUrl = getSafeCoverUrl(video, index);
+
+            const displayViews = video.metricDisplay || video.playCount || '未公开';
+            const metricLabel = video.metricLabel || '播放';
+            const coverUrl = getSafeCoverUrl(video);
+            const isDouyin = video.normPlatform === 'douyin' || video.platform === '抖音';
+            const statTooltip = (video.metricRaw == null ? '未公开' : Number(video.metricRaw).toLocaleString('zh-CN')) + ' ' + metricLabel + (isDouyin ? '（抖音全网对公众隐藏播放量，仅作者后台可见；当前展示官方权威热度值）' : (video.partsCount > 1 ? '（作品所有分P累计）' : '')) + ' · ' + (video.source || '平台公开数据');
 
             card.innerHTML = `
                 <div class="card-thumbnail-wrapper">
-                    <img class="card-thumbnail" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(video.title)}" loading="lazy">
-                    <span class="card-rank ${rankClass}">${rankIcon}</span>
+                    <img class="card-thumbnail" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(video.title)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/cover-placeholder.svg'">
+                    <span class="card-rank ${rankClass}" title="当前已获取作品内排名，不是全站历史排名">${rankIcon}</span>
                     <span class="card-duration">${escapeHtml(video.duration || 'Shorts')}</span>
                     <div class="card-play-btn">
                         <div class="card-play-btn-inner"><i class="fa-solid fa-play"></i></div>
                     </div>
                 </div>
+
                 <div class="card-details">
                     <h3 class="card-title" title="${escapeHtml(video.title)}">${escapeHtml(video.title)}</h3>
                     <div class="card-published">
                         <i class="fa-regular fa-clock"></i>
-                        <span>${formatPublishDate(video.pubdate)}</span>
+                            <span>${video.datePrecision === 'relative' ? '约 ' : ''}${formatPublishDate(video.pubdate)}${video.partsCount > 1 ? ' · ' + Number(video.partsCount) + 'P作品' : ''}</span>
                     </div>
                     <div class="card-footer">
                         <span class="card-author" title="${escapeHtml(video.author || '达人')}">
                             <i class="fa-solid fa-circle-user"></i> ${escapeHtml(video.author || '达人')}
                         </span>
-                        <div class="card-stats" title="单视频真实播放量">
+                        <div class="card-stats" title="${escapeHtml(statTooltip)}">
                             <i class="fa-solid fa-fire"></i>
-                            <span>${displayViews} 播放</span>
+                            <span>${escapeHtml(displayViews)} ${escapeHtml(metricLabel)}</span>
                         </div>
                     </div>
                 </div>
@@ -621,21 +686,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Metric Mode 2: Topic Event Leaderboard ──────────────────────
-    async function loadTopicLeaderboard() {
-        const result = await fetchTopicsApi(state.platform, state.category, state.timeRange);
-        const list = result.list || [];
-
-        if (list.length === 0) {
-            dom.emptyState.classList.remove('hidden');
-            dom.topicsGrid.classList.add('hidden');
-            return;
-        }
-
-        state.topicsList = list;
-        renderTopicLeaderboard(state.topicsList, dom.topicsGrid);
-        dom.topicsGrid.classList.remove('hidden');
-        dom.endHint.classList.remove('hidden');
-    }
 
     function renderTopicLeaderboard(topics, containerEl) {
         containerEl.innerHTML = '';
@@ -645,7 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'topic-event-card';
 
-            const rank = index + 1;
+            const rank = topic.rank || index + 1;
             const rankClass = rank === 1 ? 'top-1' : (rank === 2 ? 'top-2' : (rank === 3 ? 'top-3' : ''));
             const rankIcon = rank === 1 ? '👑 1' : (rank === 2 ? '🥈 2' : (rank === 3 ? '🥉 3' : `${rank}`));
 
@@ -662,8 +712,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="topic-card-right">
                     <div class="topic-stats-column">
-                        <span class="topic-heat-badge"><i class="fa-solid fa-fire"></i> ${escapeHtml(topic.heatDisplay || '10亿+')} 热度</span>
-                        <span class="topic-works-count">${escapeHtml(topic.worksCountDisplay || '2.4万篇作品')}</span>
+                        <span class="topic-heat-badge"><i class="fa-solid fa-fire"></i> ${escapeHtml(topic.heatDisplay || '未公开')} 热度</span>
+                        <span class="topic-works-count">${escapeHtml(topic.worksCountDisplay || '作品数未公开')}</span>
                     </div>
                     <button class="btn-view-topic-videos">
                         <span>查看关联视频</span> <i class="fa-solid fa-chevron-right"></i>
@@ -684,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Metric Mode 2: Topic Drill-Down ─────────────────────────────
     async function openTopicDrilldown(topic) {
         state.currentTopic = topic;
-        
+
         // Switch View
         dom.topicsGrid.classList.add('hidden');
         dom.topicDrilldownView.classList.remove('hidden');
@@ -697,10 +747,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         dom.drilldownTopicTag.textContent = topic.tag || '🔥 爆款话题';
         dom.drilldownTopicTitle.textContent = topic.title;
-        dom.drilldownTopicMeta.textContent = `全网话题总热度: ${topic.heatDisplay || '20亿+'} · 关联作品从高到低排序`;
+        dom.drilldownTopicMeta.textContent = `官方热度: ${topic.heatDisplay || '未公开'} · 关联视频按当前发布时效筛选`;
 
         try {
             const res = await fetchTopicVideosApi(topic);
+            if (state.currentTopic !== topic) return;
             const videos = res.list || [];
 
             if (videos.length === 0) {
@@ -716,7 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderVideoCards(videos, dom.drilldownCardsGrid);
         } catch (err) {
             console.error('[Drilldown] Fetch failed:', err);
-            showToast('获取话题关联视频失败', 'error');
+            if (state.currentTopic !== topic) return;
+            dom.drilldownCardsGrid.innerHTML = `<div class="empty-container" style="grid-column:1/-1"><h3>关联视频暂不可用</h3><p>${escapeHtml(err.message)}</p></div>`;
+            showToast(err.message, 'error');
         }
     }
 
@@ -726,60 +779,86 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.topicsGrid.classList.remove('hidden');
     }
 
+    function getResponsivePageSize() {
+        const gridWidth = dom.cardsGrid?.clientWidth || (window.innerWidth - 260);
+        const cols = Math.max(1, Math.floor((gridWidth + 18) / 288));
+        // 根据当前屏幕排布列数，智能分配 5~6 行视频（至少 25 条）
+        return Math.max(25, cols * 5);
+    }
+
     // ── Infinite Scroll Pagination ──────────────────────────────────
     function handleScrollPagination() {
         if (state.metricMode !== 'single' || state.isLoading || !state.hasMore) return;
 
         const { scrollTop, scrollHeight, clientHeight } = dom.gridScrollArea;
-        if (scrollTop + clientHeight >= scrollHeight - 120) {
+        // 提前 450px 预触发，实现无感平滑懒加载
+        if (scrollTop + clientHeight >= scrollHeight - 450) {
             loadNextPage();
         }
     }
 
-    function loadNextPage() {
+    async function loadNextPage() {
         if (state.isLoading) return;
         const currentLength = state.displayedVideos.length;
-        const totalLength = state.allVideos.length;
-
-        if (currentLength >= totalLength) {
-            state.hasMore = false;
-            dom.infiniteLoader.classList.add('hidden');
-            dom.endHint.classList.remove('hidden');
-            return;
-        }
-
         dom.infiniteLoader.classList.remove('hidden');
         state.isLoading = true;
-
-        setTimeout(() => {
-            state.page += 1;
-            const nextBatch = state.allVideos.slice(currentLength, currentLength + state.pageSize);
-            state.displayedVideos = [...state.displayedVideos, ...nextBatch];
-            renderVideoCards(state.displayedVideos, dom.cardsGrid);
-            
-            dom.infiniteLoader.classList.add('hidden');
-            state.isLoading = false;
-
-            if (state.displayedVideos.length >= totalLength) {
-                state.hasMore = false;
-                dom.endHint.classList.remove('hidden');
+        const sequence = state.requestSequence;
+        let fetchedRemote = false;
+        try {
+            // 本地候选耗尽后真正请求下一批上游搜索页，不在100条静态列表处停止。
+            for (let attempts = 0; currentLength >= state.allVideos.length && state.remoteHasMore && attempts < 3; attempts++) {
+                const params = feedParams();
+                params.set('page', String(state.remotePage + 1));
+                if (state.nextCursor) params.set('cursor', state.nextCursor);
+                const endpoint = state.searchQuery ? '/api/search?' : '/api/trends?';
+                const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
+                if (sequence !== state.requestSequence) return;
+                fetchedRemote = true;
+                state.remotePage++;
+                state.remoteHasMore = Boolean(result.hasMore);
+                state.nextCursor = result.nextCursor || '';
+                const byId = new Map(state.allVideos.map(video => [video.normPlatform + ':' + video.id, video]));
+                for (const video of result.list || []) byId.set(video.normPlatform + ':' + video.id, video);
+                state.allVideos = [...byId.values()].sort((a, b) => Number(b.metricRaw || 0) - Number(a.metricRaw || 0) || b.pubdate - a.pubdate);
+                showSourceCoverage(result);
+                const status = document.getElementById('source-status');
+                if (status) status.textContent = (result.sourceMessage || '') + ` · 已读取 ${state.remotePage} 批 · 累计 ${state.allVideos.length} 个作品`;
             }
-        }, 300);
+            if (sequence !== state.requestSequence) return;
+            state.page += 1;
+            const batchSize = getResponsivePageSize();
+            state.displayedVideos = state.allVideos.slice(0, currentLength + batchSize);
+            if (fetchedRemote) renderVideoCards(state.displayedVideos, dom.cardsGrid);
+            else renderVideoCards(state.displayedVideos.slice(currentLength), dom.cardsGrid, true, currentLength);
+            state.hasMore = state.displayedVideos.length < state.allVideos.length || state.remoteHasMore;
+            dom.endHint.classList.toggle('hidden', state.hasMore);
+        } catch (error) {
+            if (error.name !== 'AbortError' && sequence === state.requestSequence) {
+                showToast('继续加载失败：' + error.message + '。再次滚动可重试。', 'error');
+            }
+        } finally {
+            if (sequence === state.requestSequence) {
+                dom.infiniteLoader.classList.add('hidden');
+                state.isLoading = false;
+            }
+        }
     }
 
     // ── 3D Geo Radar Data Synchronizer (All 48 Cities & Multi-Tier Metrics) ─
-    async function loadGeoHotspots() {
+    async function loadGeoHotspots(sequence = state.requestSequence) {
         try {
             const data = await fetchGeoRadarApi();
+            if (sequence !== state.requestSequence) return;
             const hotspots = Array.isArray(data.list) ? data.list : (Array.isArray(data.hotspots) ? data.hotspots : []);
-            
+
             state.geoHotspots = hotspots;
-            
+
             // Update Metrics
-            dom.geoCityCount.textContent = hotspots.length || 48;
-            
+            dom.geoCityCount.textContent = hotspots.length;
+
             const totalEstimatedWorks = data.totalSignals || hotspots.reduce((acc, cur) => acc + (cur.count || 0), 0);
-            dom.geoVideoCount.textContent = formatHeat(totalEstimatedWorks) + '篇';
+            dom.geoVideoCount.textContent = totalEstimatedWorks + '条';
+            dom.geoCoverage.textContent = '样本 ' + (data.sampleSize || 0);
 
             // Render Panel List (Show all 48 cities with custom tier indicators)
             renderHotspotList(hotspots);
@@ -790,11 +869,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error('[Geo] Load failed:', err);
+            if (sequence !== state.requestSequence) return;
+            state.geoHotspots = [];
+            globeRadar.updatePoints([]);
+            if (dom.hotspotList) dom.hotspotList.innerHTML = `<p class="source-status">${escapeHtml(err.message)}</p>`;
+            if (dom.geoCityCount) dom.geoCityCount.textContent = '0';
+            if (dom.geoCoverage) dom.geoCoverage.textContent = '源不可用';
         }
     }
 
     function renderHotspotList(hotspots) {
         dom.hotspotList.innerHTML = '';
+        if (!hotspots.length) dom.hotspotList.innerHTML = '<p class="source-status">当前样本没有明确城市关联，不推测作者所在地。</p>';
         hotspots.forEach(spot => {
             const row = document.createElement('div');
             row.className = 'hotspot-row';
@@ -817,11 +903,12 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.modalPlatformBadge.textContent = video.platform || state.platform.toUpperCase();
         dom.modalVideoTitle.textContent = video.title || '视频播放';
         dom.modalVideoAuthor.innerHTML = `<i class="fa-regular fa-user"></i> ${escapeHtml(video.author || '达人')}`;
-        dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(video.playCount || formatHeat(video.playRaw || 0))} 播放`;
+        const isDouyin = video.normPlatform === 'douyin' || video.platform === '抖音';
+        dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(video.metricDisplay || video.playCount || '未公开')} ${escapeHtml(video.metricLabel || '播放')}${isDouyin ? ' <span style="font-size:12px;opacity:0.75;font-weight:normal;">(抖音全网不公开播放量)</span>' : ''}`;
 
         // Direct Original Platform Link in New Tab
-        const originUrl = video.url || `https://www.bilibili.com/video/${video.id}`;
-        dom.modalOpenOriginBtn.href = originUrl;
+        dom.modalOpenOriginBtn.href = video.url || '#';
+        dom.modalOpenOriginBtn.classList.toggle('hidden', !video.url);
 
         // Player Embed Construction
         renderPlayerEmbed(video, dom.modalVideoWrapper);
@@ -837,13 +924,23 @@ document.addEventListener('DOMContentLoaded', () => {
         containerEl.innerHTML = '';
         const bvid = video.id;
 
-        if (bvid && (bvid.startsWith('BV') || bvid.startsWith('av'))) {
+        if (bvid && (/^BV[0-9a-zA-Z]{10}$/.test(bvid) || /^av\d+$/.test(bvid))) {
             // Bilibili Iframe Player
             const iframe = document.createElement('iframe');
-            iframe.src = `https://player.bilibili.com/player.html?bvid=${bvid}&page=1&high_quality=1&as_wide=1&allowfullscreen=true&autoplay=1`;
+            iframe.src = `https://player.bilibili.com/player.html?${bvid.startsWith('av') ? 'aid=' + bvid.slice(2) : 'bvid=' + bvid}&page=1&high_quality=1&as_wide=1&allowfullscreen=true&autoplay=1`;
             iframe.setAttribute('allowfullscreen', 'true');
             iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
             containerEl.appendChild(iframe);
+        } else if (video.normPlatform === 'youtube' && /^[\w-]{11}$/.test(video.id)) {
+            const iframe = document.createElement('iframe');
+            iframe.src = 'https://www.youtube-nocookie.com/embed/' + video.id + '?autoplay=1';
+            iframe.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture'; iframe.allowFullscreen = true;
+            iframe.title = video.title; containerEl.appendChild(iframe);
+        } else if (video.normPlatform === 'tiktok' && /^\d{15,22}$/.test(video.id)) {
+            const iframe = document.createElement('iframe');
+            iframe.src = 'https://www.tiktok.com/player/v1/' + video.id + '?autoplay=1';
+            iframe.allow = 'autoplay; fullscreen'; iframe.allowFullscreen = true;
+            iframe.title = video.title; containerEl.appendChild(iframe);
         } else if (video.streamUrl) {
             // Direct MP4 / HLS Video Element
             const videoEl = document.createElement('video');
@@ -852,16 +949,38 @@ document.addEventListener('DOMContentLoaded', () => {
             videoEl.autoplay = true;
             containerEl.appendChild(videoEl);
         } else {
-            // High-Tech Cyber Placeholder with Instant Sniffer
+            // High-Tech Cyber Placeholder with Direct Sniffer & Origin Links
             containerEl.innerHTML = `
-                <div class="player-placeholder" style="background: #000;">
-                    <img src="${escapeHtml(video.cover || '')}" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.4; filter: blur(4px);">
-                    <div style="position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                        <i class="fa-solid fa-circle-play" style="font-size: 48px; color: #38bdf8; cursor: pointer;"></i>
-                        <p style="color: #fff; font-size: 14px; font-weight: 600;">点击右上角「在原平台打开」直接播放原高清画质</p>
+                <div class="player-placeholder" style="background: #000; position: relative; width: 100%; height: 100%; min-height: 240px; display: flex; align-items: center; justify-content: center;">
+                    <img src="${escapeHtml(video.cover || '')}" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.35; filter: blur(4px);">
+                    <div style="position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 20px;">
+                        <i class="fa-solid fa-circle-play play-trigger-btn" style="font-size: 52px; color: #38bdf8; cursor: pointer; transition: transform 0.2s;" title="点击尝试提取视频流或前往原站"></i>
+                        <p style="color: #fff; font-size: 13.5px; font-weight: 600; margin: 0;">支持在线嗅探物理媒体流或直接在原站观看</p>
+                        <div style="display: flex; gap: 10px; margin-top: 4px;">
+                            <button type="button" class="btn btn-primary btn-sm sniff-action-btn" style="font-size: 12px; pointer-events: auto;"><i class="fa-solid fa-wand-magic-sparkles"></i> 提取物理媒体</button>
+                            ${video.url ? `<a href="${escapeHtml(video.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="font-size: 12px; pointer-events: auto;"><i class="fa-solid fa-arrow-up-right-from-square"></i> 在原平台打开</a>` : ''}
+                        </div>
                     </div>
                 </div>
             `;
+            const sniffBtn = containerEl.querySelector('.sniff-action-btn');
+            const playTrigger = containerEl.querySelector('.play-trigger-btn');
+            if (sniffBtn) {
+                sniffBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    sniffVideoDirectStream(video, sniffBtn);
+                });
+            }
+            if (playTrigger) {
+                playTrigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (sniffBtn) {
+                        sniffVideoDirectStream(video, sniffBtn);
+                    } else if (video.url) {
+                        window.open(video.url, '_blank', 'noopener,noreferrer');
+                    }
+                });
+            }
         }
     }
 
@@ -870,12 +989,19 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.modalVideoWrapper.innerHTML = '';
         danmakuEngine.stop();
     }
+    const closeVideoModal = closePlayerModal;
+
+    function closeDrawer() {
+        dom.detailDrawer?.classList.add('hidden');
+    }
 
     // ── Stream Sniffer & Video Action Tools ──────────────────────────
     async function sniffVideoDirectStream(video, btnEl) {
         if (!video) return;
-        const targetUrl = video.url || `https://www.bilibili.com/video/${video.id}`;
-        
+        if (!requireLogin()) return;
+        const targetUrl = video.url;
+        if (!targetUrl) return showToast('作品缺少原平台链接，未构造其它平台的视频地址', 'error');
+
         const originalBtnHtml = btnEl ? btnEl.innerHTML : '';
         if (btnEl) {
             btnEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 嗅探中...`;
@@ -891,25 +1017,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ url: targetUrl })
             });
             const data = await res.json();
-
+            if (res.status === 401) { setUserSession(null); dom.authModal?.classList.remove('hidden'); }
+            if (!res.ok || !data.success || !data.videoUrl) throw new Error(data.message || data.error || '平台未返回可验证的实际媒体流');
             if (data.success && data.videoUrl) {
-                video.streamUrl = data.videoUrl;
+                if (state.activeVideo !== video) return;
+                if (!data.data?.needsMux) video.streamUrl = data.videoUrl;
                 renderPlayerEmbed(video, dom.modalVideoWrapper);
-                showToast('嗅探成功！已切换至原画直链播放', 'success');
+                showToast(data.data?.needsMux ? '已取得真实视频轨与音轨；仍使用原站播放器，有声文件需合并' : '已取得实际媒体流，播放器已尝试加载', 'success');
+                initUserSession();
 
                 // Drawer Tools Feedback
                 dom.streamUrlInput.value = data.videoUrl;
                 dom.streamUrlBox.classList.remove('hidden');
                 dom.btnDownloadVideo.classList.remove('hidden');
-                
+
                 // Populate AI Insights
                 populateAiInsights(video);
-            } else {
-                showToast('已获取原站播放凭证，建议在原平台直接观看', 'info');
             }
         } catch (err) {
             console.error('[Sniff] Error:', err);
-            showToast('嗅探服务繁忙，已为您准备原平台直达链接', 'info');
+            showToast('媒体提取失败：' + err.message + '。原站链接仍可自行查看。', 'error');
         } finally {
             if (btnEl) {
                 btnEl.innerHTML = originalBtnHtml;
@@ -920,39 +1047,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function downloadVideo(video) {
         if (!video) return;
-        const targetUrl = video.url || `https://www.bilibili.com/video/${video.id}`;
-        
-        if (video.streamUrl) {
-            const dlUrl = `/api/download?videoUrl=${encodeURIComponent(video.streamUrl)}&title=${encodeURIComponent(video.title || 'hotpot_video')}`;
-            window.open(dlUrl, '_blank');
-            showToast('已启动物理高清无水印下载', 'success');
-            return;
+        let targetUrl = video.url;
+        if (!targetUrl && video.id) {
+            if (video.id.startsWith('BV') || video.id.startsWith('av')) {
+                targetUrl = `https://www.bilibili.com/video/${video.id}`;
+            } else if (video.platform === 'douyin' || /^\d+$/.test(video.id)) {
+                targetUrl = `https://www.douyin.com/video/${video.id}`;
+            } else if (video.platform === 'youtube') {
+                targetUrl = `https://www.youtube.com/watch?v=${video.id}`;
+            } else {
+                return showToast('缺少当前作品的有效原平台链接，未替换成B站素材', 'error');
+            }
         }
 
-        showToast('正在穿透拦截物理无水印直链并下载...', 'info');
-        try {
-            const res = await fetch('/api/parse', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: targetUrl })
-            });
-            const data = await res.json();
-            if (data.success && data.videoUrl) {
-                video.streamUrl = data.videoUrl;
-                const dlUrl = `/api/download?videoUrl=${encodeURIComponent(data.videoUrl)}&title=${encodeURIComponent(video.title || data.title || 'hotpot_video')}`;
-                window.open(dlUrl, '_blank');
-                showToast('已启动物理高速下载！', 'success');
-            } else {
-                window.open(targetUrl, '_blank');
-            }
-        } catch (e) {
-            window.open(targetUrl, '_blank');
+        if (!targetUrl) return;
+
+        closeVideoModal();
+        closeDrawer();
+        switchMainView('mediatools');
+
+        if (dom.mtInputUrl) {
+            dom.mtInputUrl.value = targetUrl;
+            dom.mtClearBtn?.classList.remove('hidden');
+        }
+
+        if (window.heatHubDownloaderController) {
+            window.heatHubDownloaderController.extract(targetUrl);
         }
     }
 
     function copyVideoLink(video) {
         if (!video) return;
-        const link = video.url || `https://www.bilibili.com/video/${video.id}`;
+        const link = video.url;
+        if (!link) return showToast('作品没有可验证的原平台链接', 'error');
         navigator.clipboard.writeText(link).then(() => {
             showToast('已成功复制视频原链接到剪贴板！', 'success');
         }).catch(() => {
@@ -961,76 +1088,411 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function populateAiInsights(video) {
-        dom.aiCategoryBadge.textContent = `${video.platform || '全网'} · 爆款指数 98.6`;
-        dom.aiHighlightsList.innerHTML = `
-            <li><strong>黄金前3秒：</strong>采用强冲突视觉定格，迅速拉高用户停留率</li>
-            <li><strong>中段节奏：</strong>卡点音效配合转场，密集输出情绪价值</li>
-            <li><strong>收尾互动：</strong>提出话题性问题，引导弹幕与评论区争论二创</li>
-        `;
-        dom.aiRecommendationText.textContent = `该视频在 ${video.platform} 极具传播力，建议提炼前5秒黄金文案，配合热门BGM进行同领域选题模仿。`;
+        dom.aiCategoryBadge.textContent = '等待真实字幕分析';
+        dom.aiHighlightsList.innerHTML = '<li>打开媒体工作台后，将提取该视频字幕或原声，再生成内容总结与重点。</li>';
+        dom.aiRecommendationText.textContent = '分析依据和时间戳将在工作台显示。';
     }
 
-    // ── Authentication & Role Switching ─────────────────────────────
-    async function initUserSession() {
-        try {
-            const res = await fetch('/api/auth/me');
-            if (res.ok) {
-                const data = await res.json();
-                if (data.user) {
-                    setUserSession(data.user);
-                    return;
-                }
-            }
-        } catch (e) {}
+    // ── Global Multi-Language System (i18n) ─────────────────────────
+    const I18N_DICTIONARY = {
+        'zh-CN': {
+            title: '万热观象 | Heat Hub - 全球多平台实时热点监测与全能媒体工作台',
+            nav_feed: '榜单大盘',
+            nav_globe: '热点地球',
+            nav_downloader: '万能解析下载',
+            nav_downloader_sub: '原声下载 · 真实字幕 · 内容总结',
+            btn_user_center: '个人中心 / 登录',
+            menu_profile: '个人信息 (Profile)',
+            menu_benefits: '个人权益与配额 (Benefits)',
+            menu_history: '下载历史记录 (History)',
+            menu_settings: '系统设置 (语言/代理)',
+            menu_roles: '登录其他账号',
+            menu_logout: '退出登录',
+            hero_badge: '万热观象 · HEAT HUB 全能媒体工作台',
+            hero_title: '万能音视频解析与二创工作台',
+            hero_subtitle: '解析平台允许访问的媒体 · 有声 MP4 / 原声 MP3 · 真实字幕与语音转写 · 基于内容的重点分析。登录、地区与平台访问限制会影响可用性。',
+            btn_download_mp4: '下载无水印原画视频 (MP4)',
+            btn_extract_mp3: '提取纯音频 (MP3)',
+            btn_copy_stream: '复制下载直链',
+            tab_transcript: '原声台词与逐句字幕提取',
+            tab_ai_insights: '视频内容与重点分析',
+            transcript_sync_hint: '逐句音画对齐（点击时间戳可直接跳转视频播放）',
+            settings_title: '系统偏好与设置',
+            settings_sub: '配置多语言环境、海外平台网络代理与操作偏好',
+            set_tab_lang: '语言偏好 (Language)',
+            set_tab_proxy: '网络与代理 (Proxy)',
+            label_select_lang: '选择系统全局显示语言 (Select System Language):',
+            btn_save_settings: '保存并应用设置'
+        },
+        'zh-TW': {
+            title: '萬熱觀象 | Heat Hub - 全球多平台實時熱點監測與全能媒體工作台',
+            nav_feed: '榜單大盤',
+            nav_globe: '熱點地球',
+            nav_downloader: '萬能解析下載',
+            nav_downloader_sub: '原聲下載 · 真實字幕 · 內容總結',
+            btn_user_center: '個人中心 / 登入',
+            menu_profile: '個人資訊 (Profile)',
+            menu_benefits: '個人權益與配額 (Benefits)',
+            menu_history: '下載歷史記錄 (History)',
+            menu_settings: '系統設定 (語言/代理)',
+            menu_roles: '登入其他帳號',
+            menu_logout: '登出系統',
+            hero_badge: '萬熱觀象 · HEAT HUB 全能媒體工作台',
+            hero_title: '萬能影音解析與二創工作台',
+            hero_subtitle: '解析平台允許存取的媒體 · MP4 / 原聲 MP3 · 真實字幕與語音轉寫 · 基於內容的重點分析。登入、地區與平台限制會影響可用性。',
+            btn_download_mp4: '下載無浮水印原畫影片 (MP4)',
+            btn_extract_mp3: '提取純音訊 (MP3)',
+            btn_copy_stream: '複製下載直鏈',
+            tab_transcript: '原聲台詞與逐句字幕提取',
+            tab_ai_insights: '影片內容與重點分析',
+            transcript_sync_hint: '逐句音畫對齊（點擊時間戳可直接跳轉影片播放）',
+            settings_title: '系統偏好與設定',
+            settings_sub: '配置多語言環境、海外平台網絡代理與操作偏好',
+            set_tab_lang: '語言偏好 (Language)',
+            set_tab_proxy: '網絡與代理 (Proxy)',
+            label_select_lang: '選擇系統全局顯示語言 (Select System Language):',
+            btn_save_settings: '儲存並套用設定'
+        },
+        'en': {
+            title: 'Heat Hub | Universal Hot Video Intelligence & Multi-Platform Media Workbench',
+            nav_feed: 'Trending Feed',
+            nav_globe: '3D Radar Globe',
+            nav_downloader: 'Universal Downloader',
+            nav_downloader_sub: 'Original audio · Real captions · Content summary',
+            btn_user_center: 'User Center / Sign In',
+            menu_profile: 'User Profile',
+            menu_benefits: 'Membership & Quotas',
+            menu_history: 'Download History',
+            menu_settings: 'Preferences (Language/Proxy)',
+            menu_roles: 'Sign in to another account',
+            menu_logout: 'Log Out',
+            hero_badge: 'HEAT HUB · Universal Creator Workbench',
+            hero_title: 'Universal Media Sniffer & Creative Workbench',
+            hero_subtitle: 'Accessible platform media · MP4 and original-audio MP3 · Real subtitles and speech transcription · Evidence-based content analysis. Login, region and platform restrictions may apply.',
+            btn_download_mp4: 'Download HD Video (MP4)',
+            btn_extract_mp3: 'Extract Audio (MP3)',
+            btn_copy_stream: 'Copy Direct Stream URL',
+            tab_transcript: 'Spoken Transcript & Subtitles',
+            tab_ai_insights: 'Video content and key points',
+            transcript_sync_hint: 'Timestamp Sync (Click any timestamp to seek video playback)',
+            settings_title: 'System Settings & Preferences',
+            settings_sub: 'Customize language, international network proxies, and behaviors',
+            set_tab_lang: 'Language',
+            set_tab_proxy: 'Network Proxy',
+            label_select_lang: 'Select System Language:',
+            btn_save_settings: 'Save and Apply'
+        },
+        'ja': {
+            title: '万熱観象 | Heat Hub - 世界トレンド動画モニタリング＆万能メディアワークベンチ',
+            nav_feed: 'トレンド一覧',
+            nav_globe: '3D地球儀',
+            nav_downloader: '万能ダウンローダー',
+            nav_downloader_sub: '音声 · 実字幕 · 内容要約',
+            btn_user_center: 'ユーザーセンター / ログイン',
+            menu_profile: 'プロフィール (Profile)',
+            menu_benefits: '会員特典と利用枠 (Benefits)',
+            menu_history: 'ダウンロード履歴 (History)',
+            menu_settings: 'システム設定 (言語/プロキシ)',
+            menu_roles: '権限ロール切り替え',
+            menu_logout: 'ログアウト',
+            hero_badge: 'HEAT HUB · 万能メディアワークベンチ',
+            hero_title: '万能メディア解析＆二次創作ワークベンチ',
+            hero_subtitle: 'アクセス可能なメディア · MP4 / 音声 MP3 · 実字幕と音声認識 · 内容に基づく要点分析。ログイン・地域・サービス制限が適用されます。',
+            btn_download_mp4: '透かしなし動画保存 (MP4)',
+            btn_extract_mp3: '音声のみ抽出 (MP3)',
+            btn_copy_stream: '直リンクをコピー',
+            tab_transcript: '音声セリフ・字幕タイムライン',
+            tab_ai_insights: '動画内容と要点分析',
+            transcript_sync_hint: 'タイムスタンプ同期（クリックで動画再生位置へジャンプ）',
+            settings_title: 'システム環境設定',
+            settings_sub: 'グローバル言語環境、海外プロキシ、動作設定',
+            set_tab_lang: '言語設定 (Language)',
+            set_tab_proxy: 'プロキシ設定 (Proxy)',
+            label_select_lang: '表示言語を選択してください:',
+            btn_save_settings: '設定を保存'
+        },
+        'ko': {
+            title: '만열관상 | Heat Hub - 글로벌 실시간 핫 비디오 모니터링 및 미디어 워크벤치',
+            nav_feed: '트렌드 차트',
+            nav_globe: '3D 지구본',
+            nav_downloader: '만능 다운로더',
+            nav_downloader_sub: '원음 · 실제 자막 · 내용 요약',
+            btn_user_center: '마이페이지 / 로그인',
+            menu_profile: '개인정보 (Profile)',
+            menu_benefits: '멤버십 혜택 (Benefits)',
+            menu_history: '다운로드 기록 (History)',
+            menu_settings: '환경 설정 (언어/프록시)',
+            menu_roles: '체험 역할 전환',
+            menu_logout: '로그아웃',
+            hero_badge: 'HEAT HUB · 만능 미디어 워크벤치',
+            hero_title: '만능 스트림 추출 및 2차 창작 워크벤치',
+            hero_subtitle: '접근 가능한 미디어 · MP4 / 원음 MP3 · 실제 자막과 음성 인식 · 내용 기반 분석. 로그인, 지역 및 플랫폼 제한이 적용됩니다.',
+            btn_download_mp4: '워터마크 없는 동영상 다운로드 (MP4)',
+            btn_extract_mp3: '음원 추출 (MP3)',
+            btn_copy_stream: '직접 링크 복사',
+            tab_transcript: '음성 대사 및 자막 추출',
+            tab_ai_insights: '영상 내용 및 핵심 분석',
+            transcript_sync_hint: '타임스탬프 동기화 (클릭 시 해당 영상 재생 지점으로 이동)',
+            settings_title: '시스템 환경 설정',
+            settings_sub: '언어 설정, 해외 프록시 네트워크 및 시스템 환경 관리',
+            set_tab_lang: '언어 설정 (Language)',
+            set_tab_proxy: '프록시 설정 (Proxy)',
+            label_select_lang: '시스템 표시 언어 선택:',
+            btn_save_settings: '설정 저장 및 적용'
+        }
+    };
 
-        // Default Demo User
-        setUserSession({
-            username: 'demo',
-            nickname: '体验用户',
-            role: 'user',
-            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=demo'
-        });
+    class I18nEngine {
+        constructor() {
+            this.currentLang = localStorage.getItem('heathub_lang') || 'zh-CN';
+        }
+
+        init() {
+            this.applyLanguage(this.currentLang, false);
+        }
+
+        setLanguage(lang) {
+            if (!I18N_DICTIONARY[lang]) lang = 'zh-CN';
+            this.currentLang = lang;
+            localStorage.setItem('heathub_lang', lang);
+            this.applyLanguage(lang, true);
+        }
+
+        applyLanguage(lang, showNotification = true) {
+            const dict = I18N_DICTIONARY[lang] || I18N_DICTIONARY['zh-CN'];
+
+            // 1. Update Document Title
+            if (dict.title) document.title = dict.title;
+
+            // 2. Update all data-i18n elements
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        el.placeholder = dict[key];
+                    } else {
+                        el.textContent = dict[key];
+                    }
+                }
+            });
+
+            // 3. Update Settings modal radio cards
+            dom.langCards?.forEach(card => {
+                const cardLang = card.dataset.lang;
+                const isSelected = cardLang === lang;
+                card.classList.toggle('active', isSelected);
+                const radio = card.querySelector('input[type="radio"]');
+                if (radio) radio.checked = isSelected;
+            });
+
+            if (showNotification) {
+                const langNames = {
+                    'zh-CN': '简体中文 (Simplified Chinese)',
+                    'zh-TW': '繁體中文 (Traditional Chinese)',
+                    'en': 'English',
+                    'ja': '日本語 (Japanese)',
+                    'ko': '한국어 (Korean)'
+                };
+                showToast(`🌐 系统语言已切换为: ${langNames[lang] || lang}`, 'success');
+            }
+        }
+    }
+
+    const i18n = new I18nEngine();
+    window.i18n = i18n;
+
+    // ── Authentication, User Center & Settings Controller ────────────
+    class UserCenterController {
+        constructor() {
+            this.activeTab = 'language';
+        }
+
+        init() {
+            // 1. Toggle User Center Dropdown on clicking user identity card
+            if (dom.userIdentityCard) {
+                dom.userIdentityCard.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!state.user) return;
+                    dom.userCenterDropdown?.classList.toggle('hidden');
+                    dom.userCenterWrapper?.classList.toggle('active');
+                });
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (dom.userCenterWrapper && !dom.userCenterWrapper.contains(e.target)) {
+                    dom.userCenterDropdown?.classList.add('hidden');
+                    dom.userCenterWrapper?.classList.remove('active');
+                }
+            });
+
+            // 2. Dropdown Menu Actions
+            dom.menuBtnProfile?.addEventListener('click', () => {
+                dom.userCenterDropdown?.classList.add('hidden');
+                this.openProfileModal();
+            });
+
+            dom.menuBtnBenefits?.addEventListener('click', () => {
+                dom.userCenterDropdown?.classList.add('hidden');
+                dom.benefitsModal?.classList.remove('hidden');
+            });
+
+            dom.menuBtnHistory?.addEventListener('click', () => {
+                dom.userCenterDropdown?.classList.add('hidden');
+                switchMainView('mediatools');
+                setTimeout(() => {
+                    const histElem = document.getElementById('mt-history-list');
+                    histElem?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            });
+
+            dom.menuBtnSettings?.addEventListener('click', () => {
+                dom.userCenterDropdown?.classList.add('hidden');
+                dom.settingsModal?.classList.remove('hidden');
+            });
+
+            dom.menuBtnSwitchRole?.addEventListener('click', () => {
+                dom.userCenterDropdown?.classList.add('hidden');
+                dom.authModal?.classList.remove('hidden');
+            });
+
+            dom.menuBtnLogout?.addEventListener('click', () => {
+                dom.userCenterDropdown?.classList.add('hidden');
+                this.logout();
+            });
+
+            // 3. Profile Modal Actions
+            dom.closeProfileModalBtn?.addEventListener('click', () => {
+                dom.profileModal?.classList.add('hidden');
+            });
+            dom.profileModal?.addEventListener('click', (e) => {
+                if (e.target === dom.profileModal) dom.profileModal.classList.add('hidden');
+            });
+            dom.btnProfileToBenefits?.addEventListener('click', () => {
+                dom.profileModal?.classList.add('hidden');
+                dom.benefitsModal?.classList.remove('hidden');
+            });
+
+            // 4. Benefits Modal Actions
+            dom.closeBenefitsModalBtn?.addEventListener('click', () => {
+                dom.benefitsModal?.classList.add('hidden');
+            });
+            dom.benefitsModal?.addEventListener('click', (e) => {
+                if (e.target === dom.benefitsModal) dom.benefitsModal.classList.add('hidden');
+            });
+
+            // 5. Settings Modal Navigation Tabs
+            dom.settingsTabBtns?.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    dom.settingsTabBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const targetTab = btn.dataset.settab;
+                    dom.setContentLanguage?.classList.toggle('hidden', targetTab !== 'language');
+                    dom.setContentProxy?.classList.toggle('hidden', targetTab !== 'proxy');
+                });
+            });
+
+            // 6. Language Selection Cards
+            dom.langCards?.forEach(card => {
+                card.addEventListener('click', () => {
+                    const lang = card.dataset.lang;
+                    if (lang) i18n.setLanguage(lang);
+                });
+            });
+        }
+
+        async openProfileModal() {
+            if (!requireLogin()) return;
+            await initUserSession();
+            const user = state.user;
+            if (!user) return;
+            if (dom.profileUserAvatar) dom.profileUserAvatar.src = user.avatar || '/avatar-placeholder.svg';
+            if (dom.profileNickname) dom.profileNickname.textContent = user.nickname || user.username;
+            if (dom.profileUsername) dom.profileUsername.textContent = user.username;
+            if (dom.profileRoleBadge) dom.profileRoleBadge.textContent = user.role === 'admin' ? 'ADMIN' : user.role === 'pro' ? 'PRO' : 'USER';
+            if (dom.profileRegDate) dom.profileRegDate.textContent = user.registeredAt ? new Date(user.registeredAt).toLocaleDateString() : '旧账号未记录';
+            const quota = user.quota;
+            if (dom.profileQuotaDisplay) dom.profileQuotaDisplay.textContent = quota.limit === null
+                ? '已完成 ' + quota.used + ' 次，处理中 ' + quota.pending + ' 次（无每日配额限制）'
+                : '已完成 ' + quota.used + ' / ' + quota.limit + ' 次，处理中 ' + quota.pending + ' 次，剩余 ' + quota.remaining + ' 次';
+            if (dom.profileQuotaBar) dom.profileQuotaBar.style.width = quota.limit === null ? '0%' : Math.min(100, (quota.used + quota.pending) / quota.limit * 100) + '%';
+            const nickname = document.getElementById('profile-edit-nickname');
+            if (nickname) nickname.value = user.nickname;
+            dom.profileModal?.classList.remove('hidden');
+        }
+
+        async logout() {
+            try {
+                await readApi('/api/auth/logout', { method: 'POST' });
+                localStorage.removeItem('hotpot_token');
+                setUserSession(null);
+                dom.userCenterDropdown?.classList.add('hidden');
+                dom.profileModal?.classList.add('hidden');
+                showToast('服务端会话已注销', 'info');
+            } catch (error) { showToast('退出失败：' + error.message + '，尚未假报退出', 'error'); }
+        }
+    }
+
+    const userCenterController = new UserCenterController();
+    window.userCenterController = userCenterController;
+
+    function requireLogin() {
+        if (state.user) return true;
+        dom.authModal?.classList.remove('hidden');
+        showToast('请注册或登录真实账号，访客可浏览榜单', 'info');
+        return false;
+    }
+
+    async function initUserSession() {
+        localStorage.removeItem('hotpot_token');
+        try {
+            const response = await fetch('/api/auth/me', { cache: 'no-store' });
+            if (response.ok) { const data = await response.json(); setUserSession(data.user); return; }
+            if (response.status !== 401) showToast('账号状态读取失败，未显示虚假身份', 'warning');
+        } catch { showToast('账号状态暂不可用', 'warning'); }
+        setUserSession(null);
     }
 
     function setUserSession(user) {
+        const changed = state.user?.username !== user?.username;
         state.user = user;
         updateUserUi(user);
+        if (changed) {
+            dom.loginForm?.reset(); dom.registerForm?.reset();
+            document.getElementById('account-password-form')?.reset();
+            heatHubDownloaderController.sequence++;
+            heatHubDownloaderController.parseAbort?.abort();
+            heatHubDownloaderController.analysisAbort?.abort();
+            heatHubDownloaderController.activeData = null;
+            dom.mtResultsContainer?.classList.add('hidden');
+            dom.mtLoadingState?.classList.add('hidden');
+            dom.mtNativeVideo?.pause(); dom.mtNativeVideo?.removeAttribute('src');
+            dom.mtNativeAudio?.pause(); dom.mtNativeAudio?.removeAttribute('src');
+            document.getElementById('mt-bili-frame')?.remove();
+            dom.mtTranscriptTimeline && (dom.mtTranscriptTimeline.innerHTML = '');
+            if(dom.mtAiTrigger)dom.mtAiTrigger.textContent='请读取当前账号的视频后分析';
+            if(dom.mtAiHooks)dom.mtAiHooks.innerHTML='';
+            if(dom.mtAiRecommendations)dom.mtAiRecommendations.textContent='';
+            if(dom.mtImageGallery)dom.mtImageGallery.innerHTML='';
+            if (dom.mtExtractBtn) dom.mtExtractBtn.disabled = false;
+        }
+        heatHubDownloaderController.renderHistory();
     }
 
     function updateUserUi(user) {
-        if (!user) {
-            dom.userLoggedInBox.classList.add('hidden');
-            dom.userLoginTrigger.classList.remove('hidden');
-            return;
-        }
-
-        dom.userLoggedInBox.classList.remove('hidden');
-        dom.userLoginTrigger.classList.add('hidden');
-
-        dom.userAvatar.src = user.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`;
-        dom.userNickname.textContent = user.nickname || user.username;
-
-        const role = user.role || 'user';
-        dom.userRoleBadge.className = `role-badge role-${role}`;
-        dom.userRoleBadge.textContent = role === 'admin' ? 'ADMIN' : (role === 'pro' ? 'PRO' : 'USER');
-    }
-
-    async function switchRole(roleType) {
-        try {
-            const res = await fetch('/api/auth/demo-login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: roleType })
-            });
-            const data = await res.json();
-            if (data.success && data.user) {
-                setUserSession(data.user);
-                showToast(`已切换身份为: ${data.user.nickname}`, 'success');
-                dom.authModal.classList.add('hidden');
-            }
-        } catch (err) {
-            showToast('切换角色失败', 'error');
-        }
+        dom.userLoggedInBox?.classList.toggle('hidden', !user);
+        dom.userLoginTrigger?.classList.toggle('hidden', Boolean(user));
+        if (dom.settingProxy) dom.settingProxy.disabled=user?.role!=='admin';
+        document.querySelectorAll('.proxy-pill-btn').forEach(button=>button.disabled=user?.role!=='admin');
+        if (!user) return;
+        const avatar = user.avatar || '/avatar-placeholder.svg';
+        if (dom.userAvatar) dom.userAvatar.src = avatar;
+        if (dom.dropdownUserAvatar) dom.dropdownUserAvatar.src = avatar;
+        if (dom.userNickname) dom.userNickname.textContent = user.nickname || user.username;
+        if (dom.dropdownNickname) dom.dropdownNickname.textContent = user.nickname || user.username;
+        const label = user.role === 'admin' ? 'ADMIN' : user.role === 'pro' ? 'PRO' : 'USER';
+        for (const badge of [dom.userRoleBadge, dom.dropdownRoleBadge]) if (badge) { badge.className = 'role-badge role-' + user.role; badge.textContent = label; }
+        if (dom.dropdownQuotaCount) dom.dropdownQuotaCount.textContent = user.quota?.limit === null ? '无每日额度限制（队列有限）' : '剩余 ' + user.quota?.remaining + ' / ' + user.quota?.limit + ' 次';
     }
 
     // ── Settings & Proxy ────────────────────────────────────────────
@@ -1049,10 +1511,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasProxy = Boolean(proxyUrl && proxyUrl.trim());
         dom.proxyStatus.className = `proxy-status-badge ${hasProxy ? 'active' : 'inactive'}`;
         dom.proxyStatus.textContent = hasProxy ? '已连接' : '未连接';
-        dom.sidebarProxyDot.classList.toggle('active', hasProxy);
+        dom.sidebarProxyDot?.classList.toggle('active', hasProxy);
     }
 
     async function saveSettings() {
+        if(state.user?.role!=='admin') {
+            dom.settingsModal?.classList.add('hidden'); showToast('语言偏好已保存在本机；全局代理仅管理员可修改', 'info'); return;
+        }
         const proxy = dom.settingProxy.value.trim();
         try {
             const res = await fetch('/api/settings', {
@@ -1062,9 +1527,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (data.success) {
-                showToast('代理配置已保存', 'success');
+                showToast('系统设置与网络代理已保存生效！', 'success');
                 updateProxyStatus(proxy);
-                dom.settingsModal.classList.add('hidden');
+                dom.settingsModal?.classList.add('hidden');
             }
         } catch (e) {
             showToast('保存设置失败', 'error');
@@ -1074,8 +1539,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Helpers ─────────────────────────────────────────────────────
     function showToast(message, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = 'toast';
-        const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info');
+        toast.className = `toast toast-${type}`;
+        const icon = type === 'success' ? 'fa-circle-check' : (type === 'error' ? 'fa-circle-exclamation' : (type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info'));
         toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
         dom.toastContainer.appendChild(toast);
         setTimeout(() => {
@@ -1094,15 +1559,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatPublishDate(timestamp) {
-        if (!timestamp) return '刚刚';
-        const date = new Date(timestamp * 1000);
-        const now = new Date();
-        const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
-        if (diffHours < 1) return '刚刚';
-        if (diffHours < 24) return `${diffHours}小时前`;
-        const diffDays = Math.floor(diffHours / 24);
-        if (diffDays < 30) return `${diffDays}天前`;
-        return `${date.getMonth() + 1}月${date.getDate()}日`;
+        if (!timestamp) return '发布时间未公开';
+        let ts = Number(timestamp);
+        if (!Number.isFinite(ts) || ts <= 0) {
+            const parsed = Date.parse(timestamp);
+            ts = !isNaN(parsed) ? Math.floor(parsed / 1000) : 0;
+        }
+        if (ts > 1e11) ts = Math.floor(ts / 1000);
+        const date = new Date(ts * 1000);
+        if (isNaN(date.getTime()) || date.getFullYear() < 2000) {
+            return '发布时间未公开';
+        }
+        const y = date.getFullYear();
+        const m = date.getMonth() + 1;
+        const d = date.getDate();
+        return `${y}年${m}月${d}日`;
     }
 
     function escapeHtml(str) {
@@ -1114,15 +1585,19 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#39;');
     }
 
-    // ── MediaTools Universal Extractor & AI Insights Controller ─────
-    class MediaToolsController {
+    // ── Heat Hub Universal Downloader & Creative Master Controller ──
+    class HeatHubDownloaderController {
         constructor() {
-            this.activeParsedData = null;
+            this.sequence = 0;
+            this.analysisAbort = null;
+            this.parseAbort = null;
+            this.activeData = null;
+            this.activeP = 0;
         }
 
         init() {
-            // Quick Sample Chips
-            document.querySelectorAll('.sample-chip').forEach(btn => {
+            // 1. Quick Sample Chips
+            document.querySelectorAll('.galaxy-sample-row .sample-chip').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const url = btn.getAttribute('data-url');
                     if (url && dom.mtInputUrl) {
@@ -1133,67 +1608,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
-            // Tab switching for Transcript vs AI
-            dom.mtTabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const targetTab = btn.dataset.mttab;
-                    dom.mtTabBtns.forEach(b => b.classList.toggle('active', b === btn));
-                    if (dom.mtPanelTranscript) dom.mtPanelTranscript.classList.toggle('hidden', targetTab !== 'transcript');
-                    if (dom.mtPanelAi) dom.mtPanelAi.classList.toggle('hidden', targetTab !== 'ai');
-                });
-            });
-
-            // Copy Full Transcript
-            if (dom.mtBtnCopyTranscript) {
-                dom.mtBtnCopyTranscript.addEventListener('click', () => {
-                    if (!this.activeParsedData?.transcript?.plainText && !this.activeParsedData?.transcript?.fullText) {
-                        showToast('暂无台词可复制', 'warning');
-                        return;
-                    }
-                    const text = this.activeParsedData.transcript.plainText || this.activeParsedData.transcript.fullText;
-                    navigator.clipboard.writeText(text).then(() => {
-                        showToast('已复制全部原声台词到剪贴板', 'success');
-                    });
-                });
-            }
-
-            // Export TXT
-            if (dom.mtBtnExportTxt) {
-                dom.mtBtnExportTxt.addEventListener('click', () => {
-                    if (!this.activeParsedData?.transcript) {
-                        showToast('暂无可导出的台词', 'warning');
-                        return;
-                    }
-                    const text = this.activeParsedData.transcript.plainText || this.activeParsedData.transcript.fullText;
-                    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-                    const cleanTitle = (this.activeParsedData.title || 'video_transcript').replace(/[\\/:*?"<>|]/g, '_');
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `${cleanTitle}_台词.txt`;
-                    link.click();
-                    showToast('已成功导出台词 TXT 文档', 'success');
-                });
-            }
-
-            // Export SRT
-            if (dom.mtBtnExportSrt) {
-                dom.mtBtnExportSrt.addEventListener('click', () => {
-                    if (!this.activeParsedData?.transcript?.srtContent) {
-                        showToast('暂无可导出的字幕数据', 'warning');
-                        return;
-                    }
-                    const srt = this.activeParsedData.transcript.srtContent;
-                    const blob = new Blob([srt], { type: 'text/plain;charset=utf-8' });
-                    const cleanTitle = (this.activeParsedData.title || 'video_subtitles').replace(/[\\/:*?"<>|]/g, '_');
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `${cleanTitle}.srt`;
-                    link.click();
-                    showToast('已成功导出标准 SRT 字幕文件', 'success');
-                });
-            }
-
-            // Paste Button
+            // 2. Paste Button
             if (dom.mtPasteBtn) {
                 dom.mtPasteBtn.addEventListener('click', async () => {
                     try {
@@ -1201,16 +1616,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (text && dom.mtInputUrl) {
                             dom.mtInputUrl.value = text.trim();
                             dom.mtClearBtn?.classList.remove('hidden');
-                            showToast('已从剪贴板粘贴视频链接', 'info');
+                            showToast('已从剪贴板粘贴分享口令', 'info');
+                            this.extract(text.trim());
                         }
                     } catch (e) {
                         dom.mtInputUrl?.focus();
-                        showToast('请直接使用 Ctrl+V 粘贴链接', 'info');
+                        showToast('请直接在输入框中使用 Ctrl+V 粘贴', 'info');
                     }
                 });
             }
 
-            // Clear Button
+            // 3. Clear Button
             if (dom.mtClearBtn) {
                 dom.mtClearBtn.addEventListener('click', () => {
                     if (dom.mtInputUrl) {
@@ -1221,19 +1637,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // Input typing listener
+            // 4. Input textarea auto-grow and keydown
             if (dom.mtInputUrl) {
                 dom.mtInputUrl.addEventListener('input', () => {
                     dom.mtClearBtn?.classList.toggle('hidden', !dom.mtInputUrl.value);
+                    dom.mtErrorBox?.classList.add('hidden');
                 });
                 dom.mtInputUrl.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
                         this.extract(dom.mtInputUrl.value);
                     }
                 });
             }
 
-            // Extract Submit Button
+            // 5. Extract Submit Button
             if (dom.mtExtractBtn) {
                 dom.mtExtractBtn.addEventListener('click', () => {
                     if (dom.mtInputUrl) {
@@ -1242,206 +1660,745 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // Download MP4
-            if (dom.mtBtnDownloadMp4) {
-                dom.mtBtnDownloadMp4.addEventListener('click', () => {
-                    if (!this.activeParsedData) return;
-                    const videoUrl = this.activeParsedData.videoUrl;
-                    const title = this.activeParsedData.title || 'video';
-                    const dlUrl = `/api/download?videoUrl=${encodeURIComponent(videoUrl)}&title=${encodeURIComponent(title)}`;
-                    window.open(dlUrl, '_blank');
-                    showToast('已启动物理高清无水印下载！', 'success');
-                });
-            }
-
-            // Copy Stream URL
-            if (dom.mtBtnCopyStream) {
-                dom.mtBtnCopyStream.addEventListener('click', () => {
-                    if (!this.activeParsedData) return;
-                    const streamUrl = this.activeParsedData.videoUrl;
-                    navigator.clipboard.writeText(streamUrl).then(() => {
-                        showToast('无水印直链已复制到剪贴板', 'success');
-                    });
-                });
-            }
-
-            // Re-analyze
-            if (dom.mtBtnAnalyzeAgain) {
-                dom.mtBtnAnalyzeAgain.addEventListener('click', () => {
-                    if (this.activeParsedData) {
-                        this.runAiAnalysis(this.activeParsedData.title, this.activeParsedData.description);
+            // 6. Close Result Button
+            if (dom.mtBtnCloseResult) {
+                dom.mtBtnCloseResult.addEventListener('click', () => {
+                    dom.mtResultsContainer?.classList.add('hidden');
+                    this.sequence += 1;
+                    this.analysisAbort?.abort();
+                    this.parseAbort?.abort();
+                    document.getElementById('mt-bili-frame')?.remove();
+                    if (dom.mtNativeVideo) {
+                        dom.mtNativeVideo.pause();
+                        dom.mtNativeVideo.removeAttribute('src');
+                        dom.mtNativeVideo.load();
                     }
                 });
             }
 
-            // Role Switcher / Auth triggers
-            if (dom.mtQuickRoleBtn) {
-                dom.mtQuickRoleBtn.addEventListener('click', () => {
-                    dom.authModal?.classList.remove('hidden');
+            // 7. Dual Feature Tabs Navigation (Transcript vs AI Insights)
+            dom.mtTabBtns?.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    dom.mtTabBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const targetTab = btn.dataset.mttab;
+                    dom.mtPanelTranscript?.classList.toggle('hidden', targetTab !== 'transcript');
+                    dom.mtPanelAi?.classList.toggle('hidden', targetTab !== 'ai');
+                });
+            });
+
+            // Download prepared, validated media instead of renaming raw tracks.
+            dom.mtBtnDownloadMp4?.addEventListener('click', () => this.prepareDownload('download', dom.mtBtnDownloadMp4));
+            dom.mtBtnDownloadMp3?.addEventListener('click', () => this.prepareDownload('audio', dom.mtBtnDownloadMp3));
+
+            // 10. Copy Stream URL
+            if (dom.mtBtnCopyStream) {
+                dom.mtBtnCopyStream.addEventListener('click', () => {
+                    if (!this.activeData) return;
+                    const streamUrl = this.activeData.originDownloadVideoUrl || this.activeData.downloadVideoUrl;
+                    if (streamUrl) {
+                        navigator.clipboard.writeText(streamUrl).then(() => {
+                            showToast(this.activeData.needsMux ? '已复制视频轨地址（不含原声音轨），有声文件请使用 MP4 下载' : '实际媒体地址已复制（有有效期）', 'success');
+                        });
+                    }
                 });
             }
-            if (dom.mtOpenLogsBtn) {
-                dom.mtOpenLogsBtn.addEventListener('click', () => {
-                    dom.authModal?.classList.remove('hidden');
-                    showToast('可切换至管理员角色查看完整抓取日志', 'info');
+
+            // 11. Download All Images ZIP (for Xiaohongshu / Douyin Photos)
+            if (dom.mtBtnDownloadAllZip) {
+                dom.mtBtnDownloadAllZip.addEventListener('click', () => {
+                    if (!this.activeData || !Array.isArray(this.activeData.images) || this.activeData.images.length === 0) {
+                        showToast('当前没有可打包的原图', 'warning');
+                        return;
+                    }
+                    this.downloadAllImagesAsZip(this.activeData.title, this.activeData.images);
                 });
             }
+
+            // 12. Download BGM
+            if (dom.mtBtnDownloadBgm) {
+                dom.mtBtnDownloadBgm.addEventListener('click', () => {
+                    this.prepareDownload('audio', dom.mtBtnDownloadBgm);
+                });
+            }
+
+            // 13. Audio panel download
+            if (dom.mtBtnDownloadAudioFile) {
+                dom.mtBtnDownloadAudioFile.addEventListener('click', () => {
+                    this.prepareDownload('audio', dom.mtBtnDownloadAudioFile);
+                });
+            }
+
+            // 14. Lightbox Close
+            if (dom.mtLightboxClose) {
+                dom.mtLightboxClose.addEventListener('click', () => {
+                    dom.mtLightboxModal?.classList.add('hidden');
+                });
+            }
+            if (dom.mtLightboxModal) {
+                dom.mtLightboxModal.addEventListener('click', (e) => {
+                    if (e.target === dom.mtLightboxModal) {
+                        dom.mtLightboxModal.classList.add('hidden');
+                    }
+                });
+            }
+
+            // 15. Clear History Button
+            if (dom.mtBtnClearHistory) {
+                dom.mtBtnClearHistory.addEventListener('click', () => {
+                    this.clearHistory();
+                });
+            }
+
+            // 16. Load initial history & stats
+            this.renderHistory();
+            this.fetchTodayStats();
         }
 
-        async extract(url) {
-            if (!url || !url.trim()) {
-                showToast('请输入有效的音视频链接', 'warning');
+        triggerDownload(url, filename) {
+            let finalUrl = url;
+            if (!finalUrl.startsWith('/api/download') && !finalUrl.startsWith('/api/media/jobs/')) {
+                finalUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || 'media')}`;
+            }
+            const a = document.createElement('a');
+            a.href = finalUrl;
+            a.download = filename || 'download';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        async extract(inputUrl) {
+            if (!requireLogin()) return;
+            if (!inputUrl || !inputUrl.trim()) {
+                showToast('请先输入或粘贴视频/图文链接', 'warning');
                 dom.mtInputUrl?.focus();
                 return;
             }
 
+            const sequence = ++this.sequence;
+            this.analysisAbort?.abort();
+            this.parseAbort?.abort();
+            this.parseAbort = new AbortController();
+            this.activeData = null;
             dom.mtLoadingState?.classList.remove('hidden');
-            dom.mtResultsGrid?.classList.add('hidden');
-            if (dom.mtLoadingStep) dom.mtLoadingStep.textContent = '1/3 正在穿透反爬防御，拦截物理流媒体元数据...';
+            dom.mtResultsContainer?.classList.add('hidden');
+            dom.mtErrorBox?.classList.add('hidden');
+            if (dom.mtExtractBtn) dom.mtExtractBtn.disabled = true;
 
             try {
-                const token = localStorage.getItem('hotpot_token');
                 const headers = { 'Content-Type': 'application/json' };
-                if (token) headers['Authorization'] = `Bearer ${token}`;
 
                 const res = await fetch('/api/parse', {
                     method: 'POST',
+                    signal: this.parseAbort.signal,
                     headers,
-                    body: JSON.stringify({ url: url.trim() })
+                    body: JSON.stringify({ url: inputUrl.trim() })
                 });
 
-                const data = await res.json();
-                if (!data.success) {
-                    dom.mtLoadingState?.classList.add('hidden');
-                    showToast(data.message || data.error || '提取失败，请检查链接有效性', 'warning');
-                    return;
+                const payload = await res.json();
+                if (res.status === 401) { setUserSession(null); dom.authModal?.classList.remove('hidden'); }
+                if (sequence !== this.sequence) return;
+                if (!payload.success || !payload.data) {
+                    throw new Error(payload.error || payload.message || '解析失败，请检查链接有效性');
                 }
 
-                if (dom.mtLoadingStep) dom.mtLoadingStep.textContent = '2/3 拦截高清视频物理直链中...';
-                this.activeParsedData = data;
+                const data = payload.data;
+                this.activeData = data;
+                this.activeP = 0;
 
-                // Render Results
-                if (dom.mtResPlatform) dom.mtResPlatform.textContent = data.platform || 'UNIVERSAL';
-                if (dom.mtResTitle) dom.mtResTitle.textContent = data.title || '提取的视频';
-                if (dom.mtResAuthor) dom.mtResAuthor.textContent = data.author || '网络创作者';
-                if (dom.mtResQuality) dom.mtResQuality.textContent = data.quality || '1080P 超清物理流';
-                if (dom.mtResDuration) dom.mtResDuration.textContent = data.duration || 'Shorts';
-                if (dom.mtResOriginLink) dom.mtResOriginLink.href = data.originUrl || url;
-
-                // Video Player
-                const streamUrl = data.videoUrl;
-                if (streamUrl && dom.mtNativeVideo) {
-                    dom.mtNativeVideo.src = `/api/proxy-video?url=${encodeURIComponent(streamUrl)}`;
-                    dom.mtNativeVideo.poster = data.cover || '';
-                    dom.mtNativeVideo.play().catch(() => {});
+                // Determine Kind & Render
+                if (data.noteType === 'image' && Array.isArray(data.images) && data.images.length > 0) {
+                    this.renderImagePanel(data);
+                } else if (data.noteType === 'audio' || !data.downloadVideoUrl && !data.originDownloadVideoUrl && (data.downloadAudioUrl || data.originDownloadAudioUrl)) {
+                    this.renderAudioPanel(data);
+                } else {
+                    this.renderVideoPanel(data);
                 }
-
-                // Render Transcript
-                if (data.transcript) {
-                    this.renderTranscript(data.transcript);
-                }
-
-                if (dom.mtLoadingStep) dom.mtLoadingStep.textContent = '3/3 AI 智能拆解黄金看点与二创脚本...';
-                await this.runAiAnalysis(data.title, data.description, data.aiAnalysis);
 
                 dom.mtLoadingState?.classList.add('hidden');
-                dom.mtResultsGrid?.classList.remove('hidden');
-                showToast('万能视频提取与 AI 拆解完成！', 'success');
+                dom.mtResultsContainer?.classList.remove('hidden');
+                showToast('已取得真实媒体信息；分析和有声文件仍需处理', 'success');
 
-                // Update User Quota Card
-                if (state.user) {
-                    if (dom.mtRoleBadge) dom.mtRoleBadge.textContent = state.user.role.toUpperCase();
-                    if (dom.mtQuotaCount) dom.mtQuotaCount.textContent = state.user.role === 'user' ? `${state.user.remaining}次` : '无限次';
-                }
+                this.renderHistory();
+                initUserSession();
 
-            } catch (e) {
-                console.error('[MediaTools] Extract Error:', e);
+                this.fetchTodayStats();
+                if (data.noteType !== 'image') this.runAnalysis(data, sequence);
+
+            } catch (err) {
+                if (err.name === 'AbortError' || sequence !== this.sequence) return;
+                console.error('[Heat Hub Downloader] Extract Error:', err);
                 dom.mtLoadingState?.classList.add('hidden');
-                showToast('网络连接异常，请重试', 'warning');
+                if (dom.mtErrorBox && dom.mtErrorMsg) {
+                    dom.mtErrorMsg.textContent = err.message || '解析引擎出现错误，请检查链接';
+                    dom.mtErrorBox.classList.remove('hidden');
+                }
+                showToast(err.message || '解析失败，请检查链接有效性', 'warning');
+            } finally {
+                if (sequence === this.sequence && dom.mtExtractBtn) dom.mtExtractBtn.disabled = false;
             }
         }
 
-        renderTranscript(transcriptData) {
-            if (!dom.mtTranscriptTimeline) return;
-            const items = transcriptData?.transcript || [];
-            if (dom.mtTranscriptCount) {
-                dom.mtTranscriptCount.textContent = `${items.length}句`;
+        renderVideoPanel(data) {
+            dom.mtPanelVideo?.classList.remove('hidden');
+            dom.mtPanelImage?.classList.add('hidden');
+            dom.mtPanelAudio?.classList.add('hidden');
+
+            if (dom.mtResPlatform) {
+                const platNames = {
+                    douyin: '抖音无水印',
+                    bilibili: '哔哩哔哩',
+                    xiaohongshu: '小红书',
+                    kuaishou: '快手',
+                    youtube: 'YouTube',
+                    tiktok: 'TikTok',
+                    twitter: 'Twitter / X',
+                    universal: '网页在线流'
+                };
+                dom.mtResPlatform.textContent = platNames[data.platform] || String(data.platform || 'UNIVERSAL').toUpperCase();
             }
-            if (items.length === 0) {
-                dom.mtTranscriptTimeline.innerHTML = `
-                    <div class="transcript-empty-state">
-                        <i class="fa-solid fa-microphone-lines"></i>
-                        <p>该视频暂无字幕文本</p>
-                    </div>
-                `;
+
+            if (dom.mtResTitle) dom.mtResTitle.textContent = data.title || '无标题视频';
+            if (dom.mtResAuthor) dom.mtResAuthor.textContent = data.author || '创作者';
+            if (dom.mtResDuration) {
+                const dur = data.duration;
+                dom.mtResDuration.textContent = typeof dur === 'number' ? `${Math.floor(dur / 60)}分${dur % 60}秒` : (dur || 'Shorts');
+            }
+            if (dom.mtResOriginLink) {
+                dom.mtResOriginLink.href = data.url || '#';
+            }
+
+            // Stream playback proxy URL
+            const playUrl = data.playVideoUrl || `/api/play?url=${encodeURIComponent(data.originDownloadVideoUrl || data.downloadVideoUrl)}&referer=${encodeURIComponent(data.url || '')}`;
+            if (dom.mtNativeVideo) {
+                document.getElementById('mt-bili-frame')?.remove();
+                dom.mtNativeVideo.classList.toggle('hidden', Boolean(data.needsMux && data.bvid));
+                if (data.needsMux) dom.mtNativeVideo.removeAttribute('src');
+                else dom.mtNativeVideo.src = playUrl;
+                dom.mtNativeVideo.poster = data.cover || '';
+                dom.mtNativeVideo.load();
+                if (data.needsMux && data.bvid) {
+                    const iframe = document.createElement('iframe');
+                    iframe.id = 'mt-bili-frame';
+                    iframe.src = 'https://player.bilibili.com/player.html?bvid=' + encodeURIComponent(data.bvid) + '&cid=' + data.cid + '&autoplay=0';
+                    iframe.allowFullscreen = true;
+                    iframe.style.cssText = 'width:100%;aspect-ratio:16/9;border:0;display:block;';
+                    dom.mtNativeVideo.parentNode.appendChild(iframe);
+                }
+            }
+
+            // Multi-P Pages (for Bilibili multi-part videos)
+            if (dom.mtPagesWrapper && dom.mtPagesList) {
+                if (Array.isArray(data.pages) && data.pages.length > 1) {
+                    dom.mtPagesCount.textContent = data.pages.length;
+                    dom.mtPagesList.innerHTML = data.pages.map((p, idx) => `
+                        <button class="page-pill ${p.cid === data.cid ? 'active' : ''}" data-pindex="${idx}">
+                            <span class="p-num">P${p.page || (idx + 1)}</span>
+                            <span class="p-title">${escapeHtml(p.part || `第${idx + 1}节`)}</span>
+                        </button>
+                    `).join('');
+                    dom.mtPagesWrapper.classList.remove('hidden');
+
+                    // Bind page click events
+                    dom.mtPagesList.querySelectorAll('.page-pill').forEach(pill => {
+                        pill.addEventListener('click', () => {
+                            const pIndex = parseInt(pill.dataset.pindex) || 0;
+                            dom.mtPagesList.querySelectorAll('.page-pill').forEach(el => el.classList.remove('active'));
+                            pill.classList.add('active');
+                            this.switchMultiPage(data, pIndex);
+                        });
+                    });
+                } else {
+                    dom.mtPagesWrapper.classList.add('hidden');
+                }
+            }
+
+            // Render Transcript Timeline
+            this.renderTranscript(data.transcript, data.title);
+
+            // Render AI Video Insights
+            this.renderAiInsights(data.aiAnalysis, data);
+        }
+
+        renderTranscript(transcriptData, title) {
+            let list = [];
+            let fullText = '';
+            let srtContent = '';
+
+            if (transcriptData) {
+                if (Array.isArray(transcriptData)) {
+                    list = transcriptData;
+                } else if (Array.isArray(transcriptData.transcript)) {
+                    list = transcriptData.transcript;
+                    fullText = transcriptData.fullText || transcriptData.plainText || '';
+                    srtContent = transcriptData.srtContent || '';
+                }
+            }
+
+            if (!fullText && list.length > 0) {
+                fullText = list.map(item => item.text).join('\n');
+            }
+
+            if (dom.mtTranscriptCount) {
+                dom.mtTranscriptCount.textContent = `${list.length}句`;
+            }
+
+            if (dom.mtTranscriptTimeline) {
+                if (list.length === 0) {
+                    dom.mtTranscriptTimeline.innerHTML = `
+                        <div class="transcript-empty-state">
+                            <i class="fa-solid fa-microphone-lines"></i>
+                            <p>该视频暂未提取到逐句原声台词</p>
+                        </div>
+                    `;
+                } else {
+                    dom.mtTranscriptTimeline.innerHTML = list.map(item => {
+                        const startSec = item.startSec || 0;
+                        const mm = String(Math.floor(startSec / 60)).padStart(2, '0');
+                        const ss = String(Math.floor(startSec % 60)).padStart(2, '0');
+                        const timeStr = `${mm}:${ss}`;
+
+                        return `
+                            <div class="transcript-line-item" data-start="${startSec}" title="点击跳转至 ${timeStr} 播放">
+                                <button type="button" class="time-stamp-btn" data-start="${startSec}">[${timeStr}]</button>
+                                <span class="line-content-text">${escapeHtml(item.text)}</span>
+                            </div>
+                        `;
+                    }).join('');
+
+                    // Bind click to seek video
+                    dom.mtTranscriptTimeline.querySelectorAll('.transcript-line-item').forEach(line => {
+                        line.addEventListener('click', () => {
+                            const sec = parseFloat(line.dataset.start) || 0;
+                            if (dom.mtNativeVideo) {
+                                this.seekVideo(sec);
+                                showToast(`已跳转至 ${Math.floor(sec)}秒 播放`, 'info');
+                            }
+                        });
+                    });
+
+                    // Sync video playback time with transcript highlight in real time
+                    if (dom.mtNativeVideo) {
+                        dom.mtNativeVideo.ontimeupdate = () => {
+                            const curTime = dom.mtNativeVideo.currentTime;
+                            const items = dom.mtTranscriptTimeline?.querySelectorAll('.transcript-line-item');
+                            if (!items || items.length === 0) return;
+
+                            let activeIdx = -1;
+                            for (let i = 0; i < items.length; i++) {
+                                const s = parseFloat(items[i].dataset.start) || 0;
+                                const nextS = items[i + 1] ? (parseFloat(items[i + 1].dataset.start) || Infinity) : Infinity;
+                                if (curTime >= s && curTime < nextS) {
+                                    activeIdx = i;
+                                    break;
+                                }
+                            }
+
+                            if (activeIdx !== -1) {
+                                items.forEach((item, idx) => {
+                                    const isCurrent = idx === activeIdx;
+                                    if (item.classList.contains('active') !== isCurrent) {
+                                        item.classList.toggle('active', isCurrent);
+                                        if (isCurrent && dom.mtTranscriptTimeline) {
+                                            const container = dom.mtTranscriptTimeline;
+                                            const cTop = container.scrollTop;
+                                            const cHeight = container.clientHeight;
+                                            const itemTop = item.offsetTop - container.offsetTop;
+                                            if (itemTop < cTop || itemTop > cTop + cHeight - 40) {
+                                                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        };
+                    }
+                }
+            }
+
+            // Bind Transcript Action Buttons
+            if (dom.mtBtnCopyTranscript) {
+                dom.mtBtnCopyTranscript.onclick = () => {
+                    if (!fullText) {
+                        showToast('暂无可复制的台词内容', 'warning');
+                        return;
+                    }
+                    navigator.clipboard.writeText(fullText).then(() => {
+                        showToast('已复制全部原声台词全文！', 'success');
+                    });
+                };
+            }
+
+            if (dom.mtBtnExportTxt) {
+                dom.mtBtnExportTxt.onclick = () => {
+                    if (!fullText) {
+                        showToast('暂无可导出的台词', 'warning');
+                        return;
+                    }
+                    const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `${title || 'video'}_原声台词.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(blobUrl);
+                    showToast('已成功导出 TXT 台词文档！', 'success');
+                };
+            }
+
+            if (dom.mtBtnExportSrt) {
+                dom.mtBtnExportSrt.onclick = () => {
+                    let srt = srtContent;
+                    if (!srt && list.length > 0) {
+                        srt = list.map((item, idx) => {
+                            const s = item.startSec || 0;
+                            const e = item.endSec || (s + 3);
+                            const formatSrtTime = (sec) => {
+                                const h = String(Math.floor(sec / 3600)).padStart(2, '0');
+                                const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+                                const sInt = String(Math.floor(sec % 60)).padStart(2, '0');
+                                const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, '0');
+                                return `${h}:${m}:${sInt},${ms}`;
+                            };
+                            return `${idx + 1}\n${formatSrtTime(s)} --> ${formatSrtTime(e)}\n${item.text}\n`;
+                        }).join('\n');
+                    }
+
+                    if (!srt) {
+                        showToast('暂无可导出的字幕时间轴', 'warning');
+                        return;
+                    }
+
+                    const blob = new Blob([srt], { type: 'text/plain;charset=utf-8' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `${title || 'video'}_标准字幕.srt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(blobUrl);
+                    showToast('已成功导出 SRT 字幕文件！', 'success');
+                };
+            }
+        }
+
+        renderAiInsights(aiData, videoData) {
+            if (dom.mtAiCategory) dom.mtAiCategory.textContent = aiData?.category || '等待内容分析';
+            if (dom.mtAiAudience) dom.mtAiAudience.textContent = aiData ? (aiData.method === 'extractive' ? '真实字幕摘录' : '基于真实字幕的 AI 总结') : '分析尚未完成';
+            if (dom.mtAiTrigger) dom.mtAiTrigger.textContent = aiData?.summary || '读取实际字幕或视频原声后，将显示视频讲了什么。';
+            if (dom.mtAiHooks) {
+                const points = aiData?.keyPoints || [];
+                dom.mtAiHooks.innerHTML = points.length ? points.map(point => `
+                    <button class="hook-card analysis-point" data-seek="${Number(point.startSec)}">
+                        <span class="hook-tag">${Math.floor(point.startSec / 60)}:${String(Math.floor(point.startSec % 60)).padStart(2, '0')}</span>
+                        <p class="hook-desc">${escapeHtml(point.text)}</p>
+                        <blockquote>字幕依据：${escapeHtml(point.quote)}</blockquote>
+                    </button>
+                `).join('') : '<p>等待可回溯的字幕重点。</p>';
+                dom.mtAiHooks.querySelectorAll('[data-seek]').forEach(button => button.addEventListener('click', () => this.seekVideo(Number(button.dataset.seek))));
+            }
+            if (dom.mtAiStoryboard) dom.mtAiStoryboard.textContent = aiData?.notice || '内容分析依据字幕与语音。画面、镜头及音乐没有进行视觉识别。';
+            if (dom.mtAiRecommendations) dom.mtAiRecommendations.textContent = aiData?.recommendations || '分析完成后显示基于内容的学习建议。';
+        }
+
+        seekVideo(sec) {
+            const frame = document.getElementById('mt-bili-frame');
+            if (frame) {
+                const url = new URL(frame.src);
+                url.searchParams.set('t', Math.floor(sec));
+                frame.src = url.toString();
+            } else if (dom.mtNativeVideo) {
+                dom.mtNativeVideo.currentTime = sec;
+                dom.mtNativeVideo.play().catch(() => {});
+            }
+        }
+
+        async pollJob(kind, data, onUpdate, signal) {
+            const payload = await readApi('/api/media/jobs', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: data.url, mediaId: data.mediaId, kind }) });
+            let job = payload.job;
+            while (true) {
+                onUpdate?.(job);
+                if (job.status === 'complete') return job;
+                if (job.status === 'failed') throw new Error(job.error || job.message);
+                await new Promise((resolve, reject) => {
+                    const timer = setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(); }, 1200);
+                    const cancel = () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); };
+                    if (signal?.aborted) return cancel();
+                    signal?.addEventListener('abort', cancel, { once: true });
+                });
+                job = (await readApi('/api/media/jobs/' + job.id, { signal })).job;
+            }
+        }
+
+        async runAnalysis(data, sequence = this.sequence) {
+            this.analysisAbort?.abort();
+            this.analysisAbort = new AbortController();
+            const status = document.getElementById('mt-analysis-status');
+            document.getElementById('mt-btn-retry-analysis')?.classList.add('hidden');
+            let renderedCount = 0;
+            try {
+                const job = await this.pollJob('analyze', data, current => {
+                    if (sequence !== this.sequence) return;
+                    if (status) status.textContent = current.message + ' · ' + current.progress + '%';
+                    if (current.transcript && current.transcript.lineCount !== renderedCount) {
+                        const scrollTop = dom.mtTranscriptTimeline?.scrollTop || 0;
+                        this.renderTranscript(current.transcript, data.title);
+                        if (dom.mtTranscriptTimeline) dom.mtTranscriptTimeline.scrollTop = scrollTop;
+                        renderedCount = current.transcript.lineCount;
+                    }
+                }, this.analysisAbort.signal);
+                if (sequence !== this.sequence) return;
+                data.transcript = job.transcript;
+                data.aiAnalysis = job.analysis;
+                this.renderTranscript(job.transcript, data.title);
+                this.renderAiInsights(job.analysis, data);
+                if (status) status.textContent = (job.analysis?.method === 'extractive' ? '转写完成 · 原句摘录（非AI语义总结）' : '完成 · AI语义总结') + ' · ' + (job.transcript.source === 'platform-subtitles' ? '平台字幕' : '原声语音识别') + ' · ' + job.transcript.lineCount + '句' + (job.transcript.notice ? ' · ' + job.transcript.notice : '');
+                if (job.accountWriteFailed) showToast('分析已完成，但账户配额/历史记录写入失败，请检查存储环境', 'warning');
+                initUserSession(); this.renderHistory();
+            } catch (error) {
+                if (error.name === 'AbortError' || sequence !== this.sequence) return;
+                if (status) status.textContent = '分析失败：' + error.message;
+                document.getElementById('mt-btn-retry-analysis')?.classList.remove('hidden');
+                this.renderAiInsights(null, data);
+            }
+        }
+
+        async prepareDownload(kind, button) {
+            if (!requireLogin()) return;
+            const data = this.activeData;
+            if (!data) return;
+            const original = button?.innerHTML;
+            const owner = state.user.username;
+            if (button) button.disabled = true;
+            try {
+                const job = await this.pollJob(kind, data, current => {
+                    if (button) button.textContent = current.message + ' ' + current.progress + '%';
+                });
+                if (state.user?.username !== owner) return;
+                if (!job.downloadUrl) throw new Error('文件尚未生成');
+                this.triggerDownload(job.downloadUrl, data.title);
+                if (kind === 'download' && data === this.activeData && dom.mtNativeVideo) {
+                    document.getElementById('mt-bili-frame')?.remove();
+                    dom.mtNativeVideo.classList.remove('hidden');
+                    dom.mtNativeVideo.src = job.downloadUrl;
+                }
+                showToast(kind === 'download' ? (job.hasAudio === false ? '已生成 MP4（原视频没有音轨）' : '已生成有声 MP4，开始下载') : '已转换为 MP3，开始下载', 'success');
+                if (job.accountWriteFailed) showToast('媒体已生成，但账户配额/历史记录写入失败，请检查存储环境', 'warning');
+            } catch (error) { showToast(error.message, 'error'); }
+            finally { if (button) { button.innerHTML = original; button.disabled = false; } initUserSession(); this.renderHistory(); }
+        }
+
+        switchMultiPage(data, pIndex) {
+            const pageItem = data.pages?.[pIndex];
+            if (!pageItem) return;
+            const url = new URL(data.url);
+            url.searchParams.set('p', pageItem.page);
+            this.extract(url.toString());
+        }
+
+        renderImagePanel(data) {
+            dom.mtPanelVideo?.classList.add('hidden');
+            dom.mtPanelImage?.classList.remove('hidden');
+            dom.mtPanelAudio?.classList.add('hidden');
+
+            if (dom.mtImgTitle) dom.mtImgTitle.textContent = data.title || '小红书/抖音图文笔记';
+            const images = data.images || [];
+            if (dom.mtImgCount) dom.mtImgCount.textContent = images.length;
+
+            if (dom.mtBtnDownloadBgm) {
+                const hasBgm = Boolean(data.originDownloadAudioUrl || data.downloadAudioUrl);
+                dom.mtBtnDownloadBgm.classList.toggle('hidden', !hasBgm);
+            }
+
+            if (dom.mtImageGallery) {
+                dom.mtImageGallery.innerHTML = images.map((img, idx) => {
+                    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.url)}`;
+                    return `
+                        <div class="galaxy-image-card">
+                            <div class="img-preview-box" data-full="${escapeHtml(img.url)}" data-index="${idx + 1}">
+                                <img src="${escapeHtml(proxyUrl)}" alt="原图 ${idx + 1}" loading="lazy" decoding="async" class="note-thumb">
+                                <span class="img-idx-badge">#${idx + 1}</span>
+                                <div class="img-zoom-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i> 查看大图</div>
+                            </div>
+                            <div class="img-card-actions">
+                                <button class="btn-dl-single-img" data-url="${escapeHtml(img.url)}" data-idx="${idx + 1}">
+                                    <i class="fa-solid fa-arrow-down-to-line"></i> 下载此原图
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Bind single image download & zoom
+                dom.mtImageGallery.querySelectorAll('.img-preview-box').forEach(box => {
+                    box.addEventListener('click', () => {
+                        const fullUrl = box.dataset.full;
+                        const idx = parseInt(box.dataset.index, 10) - 1;
+                        this.openLightbox(fullUrl, `${data.title || '原图'}`, idx);
+                    });
+                });
+
+                dom.mtImageGallery.querySelectorAll('.btn-dl-single-img').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const imgUrl = btn.dataset.url;
+                        const idx = btn.dataset.idx;
+                        this.downloadSingleImage(imgUrl, `${data.title || 'image'}_${idx}`);
+                    });
+                });
+            }
+        }
+
+        renderAudioPanel(data) {
+            dom.mtPanelVideo?.classList.add('hidden');
+            dom.mtPanelImage?.classList.add('hidden');
+            dom.mtPanelAudio?.classList.remove('hidden');
+
+            if (dom.mtAudioTitle) dom.mtAudioTitle.textContent = data.title || '纯音频节目';
+            const audioUrl = data.playVideoUrl || data.downloadAudioUrl || data.originDownloadAudioUrl;
+            if (dom.mtNativeAudio && audioUrl) {
+                dom.mtNativeAudio.src = audioUrl;
+                dom.mtNativeAudio.load();
+            }
+        }
+
+        openLightbox(imgUrl, title, index = 0) {
+            if (!dom.mtLightboxModal || !dom.mtLightboxImg) return;
+            this.lightboxIndex = index;
+            const images = this.activeData?.images || [];
+            const curImg = (images[index] && images[index].url) ? images[index].url : imgUrl;
+            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(curImg)}`;
+            dom.mtLightboxImg.src = proxyUrl;
+            const displayTitle = images.length > 1 ? `${title || '原图'} (${index + 1}/${images.length})` : (title || '大图预览');
+            if (dom.mtLightboxTitle) dom.mtLightboxTitle.textContent = displayTitle;
+            if (dom.mtLightboxDownload) {
+                dom.mtLightboxDownload.href = '#';
+                dom.mtLightboxDownload.onclick = event => { event.preventDefault(); this.downloadSingleImage(curImg, `${title || 'image'}_${index + 1}`); };
+            }
+            dom.mtLightboxModal.classList.remove('hidden');
+        }
+
+        navigateLightbox(direction) {
+            const images = this.activeData?.images || [];
+            if (images.length <= 1) return;
+            let nextIndex = (this.lightboxIndex || 0) + direction;
+            if (nextIndex < 0) nextIndex = images.length - 1;
+            if (nextIndex >= images.length) nextIndex = 0;
+            this.openLightbox(images[nextIndex].url, this.activeData.title, nextIndex);
+        }
+
+        async readOriginalImage(url) {
+            const response = await fetch('/api/proxy-image?download=1&url=' + encodeURIComponent(url));
+            if (!response.ok) throw new Error('原图接口返回HTTP ' + response.status);
+            const blob = await response.blob();
+            const extensions = { 'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp', 'image/gif':'gif', 'image/avif':'avif' };
+            if (!blob.size || !extensions[blob.type]) throw new Error('未取得可验证的原图，不能下载占位图片');
+            return { blob, ext:extensions[blob.type] };
+        }
+
+        saveBlob(blob, filename) {
+            const url = URL.createObjectURL(blob), anchor = document.createElement('a');
+            anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        async downloadSingleImage(url, title) {
+            if (!requireLogin()) return;
+            try { const image = await this.readOriginalImage(url); this.saveBlob(image.blob, (title || 'image').replace(/[\\/:*?"<>|]/g,'_') + '.' + image.ext); this.renderHistory(); }
+            catch (error) { showToast(error.message, 'error'); }
+        }
+
+        async downloadAllImagesAsZip(title, images) {
+            if (!requireLogin()) return;
+            if (typeof JSZip === 'undefined') return showToast('图片打包组件不可用', 'error');
+            const zip = new JSZip(), clean = (title || 'images').replace(/[\\/:*?"<>|]/g,'_'), failures = [];
+            let completed = 0, cursor = 0;
+            showToast('正在获取并核验 ' + images.length + ' 张实际原图', 'info');
+            await Promise.all(Array.from({length:Math.min(3,images.length)}, async () => {
+                while (cursor < images.length) {
+                    const index = cursor++;
+                    try { const image = await this.readOriginalImage(images[index].url); zip.file(clean + '_' + (index+1) + '.' + image.ext, image.blob); completed++; }
+                    catch (error) { failures.push('第' + (index+1) + '张：' + error.message); }
+                }
+            }));
+            if (!completed) return showToast('全部原图获取失败，未生成空ZIP或占位图ZIP', 'error');
+            if (failures.length) zip.file('FAILED.txt', failures.join('\n'));
+            this.saveBlob(await zip.generateAsync({type:'blob'}), clean + (failures.length ? '_部分原图.zip' : '_全部原图.zip'));
+            showToast('已打包真实原图 ' + completed + ' / ' + images.length + ' 张' + (failures.length ? '；缺失记录见FAILED.txt' : ''), failures.length ? 'warning' : 'success');
+            this.renderHistory();
+        }
+
+        // 服务端按账号隔离的实际处理记录；解析、生成与发送状态不混为“已下载”。
+        async removeHistoryItem(id) {
+            try { await readApi('/api/account/history/' + encodeURIComponent(id), { method: 'DELETE' }); await this.renderHistory(); }
+            catch (error) { showToast(error.message, 'error'); }
+        }
+
+        async clearHistory() {
+            if (!requireLogin()) return;
+            try { await readApi('/api/account/history', { method: 'DELETE' }); await this.renderHistory(); showToast('本账号处理记录已清空', 'info'); }
+            catch (error) { showToast(error.message, 'error'); }
+        }
+
+        async renderHistory() {
+            if (!dom.mtHistoryList) return;
+            const owner = state.user?.username;
+            if (!owner) {
+                dom.mtHistoryList.innerHTML = '<p class="history-empty">请登录查看本账号的真实处理记录；不读取其它账号或浏览器演示记录。</p>';
+                if (dom.mtHistoryCount) dom.mtHistoryCount.textContent = '0';
                 return;
             }
-
-            dom.mtTranscriptTimeline.innerHTML = items.map(line => `
-                <div class="transcript-item" data-start="${line.startSec || 0}">
-                    <span class="transcript-time-badge">${escapeHtml(line.start)}</span>
-                    <span class="transcript-line-text">${escapeHtml(line.text)}</span>
-                </div>
-            `).join('');
-
-            // Add click-to-seek listeners
-            dom.mtTranscriptTimeline.querySelectorAll('.transcript-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    const startSec = parseFloat(el.dataset.start) || 0;
-                    if (dom.mtNativeVideo) {
-                        dom.mtNativeVideo.currentTime = startSec;
-                        dom.mtNativeVideo.play().catch(() => {});
-                        showToast(`已跳转至 ${el.querySelector('.transcript-time-badge')?.textContent}`, 'info');
-                    }
-                });
-            });
+            try {
+                const response = await readApi('/api/account/history');
+                if (state.user?.username !== owner) return;
+                const list = response.list || [];
+                if (dom.mtHistoryCount) dom.mtHistoryCount.textContent = list.length;
+                const statuses = { parsed: '已解析（尚未下载）', prepared: '已生成结果', sent: '服务端已发送文件（不代表已保存到磁盘）', streamed:'已发送媒体预览/片段', failed: '处理失败' };
+                const kinds = { parse: '媒体解析', analyze: '字幕与内容分析', transcript: '字幕转写', download: 'MP4生成', audio: 'MP3转码', 'direct-download': '直接文件发送' };
+                dom.mtHistoryList.innerHTML = list.length ? list.map(item =>
+                    '<div class="history-item-row"><div class="hist-info"><div class="hist-title-row"><span class="hist-plat-badge">' + escapeHtml(kinds[item.kind] || item.kind) + '</span><span class="hist-title">' + escapeHtml(item.title || '处理记录') + '</span></div><span class="hist-time">' + escapeHtml(statuses[item.status] || item.status) + ' · ' + new Date(item.timestamp).toLocaleString() + '</span></div><div class="hist-actions">' +
+                    (item.url ? '<button class="btn-hist-reparse" data-url="' + escapeHtml(item.url) + '">重新解析</button>' : '') +
+                    '<button class="btn-hist-del" data-id="' + escapeHtml(item.id) + '">删除记录</button></div></div>'
+                ).join('') : '<p class="history-empty">本账号暂无实际处理记录。</p>';
+                dom.mtHistoryList.querySelectorAll('.btn-hist-reparse').forEach(button => button.addEventListener('click', () => { dom.mtInputUrl.value = button.dataset.url; this.extract(button.dataset.url); }));
+                dom.mtHistoryList.querySelectorAll('.btn-hist-del').forEach(button => button.addEventListener('click', () => this.removeHistoryItem(button.dataset.id)));
+            } catch (error) {
+                if (state.user?.username === owner) dom.mtHistoryList.textContent = '处理记录读取失败：' + error.message;
+            }
         }
 
-        async runAiAnalysis(title, description, directAiData = null) {
-            let data = directAiData;
-            if (!data) {
-                try {
-                    const res = await fetch('/api/analyze', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: title || '', description: description || '' })
-                    });
-                    data = await res.json();
-                } catch (e) {
-                    console.warn('[AI Analyzer] Error:', e);
+        async fetchTodayStats() {
+            try {
+                const res = await fetch('/api/stats/today');
+                const data = await res.json();
+                if (data && data.success) {
+                    if (dom.mtTodayTotalCount) {
+                        dom.mtTodayTotalCount.textContent = Number(data.totalCount || 0).toLocaleString();
+                    }
+                    if (dom.mtTodayPlatforms && data.platforms) {
+                        dom.mtTodayPlatforms.innerHTML = `
+                            <div class="stat-pill"><span class="pill-dot dy"></span> 抖音 <strong>${data.platforms.douyin || 0}</strong></div>
+                            <div class="stat-pill"><span class="pill-dot bili"></span> B站 <strong>${data.platforms.bilibili || 0}</strong></div>
+                            <div class="stat-pill"><span class="pill-dot xhs"></span> 小红书 <strong>${data.platforms.xiaohongshu || 0}</strong></div>
+                            <div class="stat-pill"><span class="pill-dot ks"></span> 快手 <strong>${data.platforms.kuaishou || 0}</strong></div>
+                        `;
+                    }
                 }
-            }
-
-            if (data && (data.success || data.category)) {
-                if (dom.mtAiCategory) dom.mtAiCategory.textContent = data.category || '生活娱乐 & 综合创意';
-                if (dom.mtAiAudience) dom.mtAiAudience.textContent = data.targetAudience || '全网短视频消费者';
-                if (dom.mtAiTrigger) dom.mtAiTrigger.textContent = data.emotionalTrigger || '通过反差叙事与视觉冲击引发共鸣';
-                if (dom.mtAiRecommendations) dom.mtAiRecommendations.textContent = data.recommendations || '建议结合原平台播放页的热门评论与弹幕，学习观众最感兴趣的互动槽点。';
-
-                // Golden Hooks
-                if (dom.mtAiHooks && Array.isArray(data.goldenHooks)) {
-                    dom.mtAiHooks.innerHTML = data.goldenHooks.map(h => `
-                        <div class="hook-card">
-                            <span class="hook-tag">${escapeHtml(h.phase)} · ${escapeHtml(h.title)}</span>
-                            <p class="hook-desc">${escapeHtml(h.desc)}</p>
-                        </div>
-                    `).join('');
-                }
-
-                // Storyboard
-                if (dom.mtAiStoryboard && Array.isArray(data.storyboardSuggestions)) {
-                    dom.mtAiStoryboard.innerHTML = data.storyboardSuggestions.map(s => `
-                        <div class="storyboard-item">
-                            <div class="shot-header"><span class="shot-badge">${escapeHtml(s.shot)}</span> <strong>${escapeHtml(s.type)}</strong></div>
-                            <p class="shot-action">${escapeHtml(s.action)}</p>
-                        </div>
-                    `).join('');
-                }
+            } catch (e) {
+                console.warn('[Stats] Failed to fetch today stats:', e);
             }
         }
     }
 
-    const mediaToolsController = new MediaToolsController();
+    const heatHubDownloaderController = new HeatHubDownloaderController();
+    window.heatHubDownloaderController = heatHubDownloaderController;
+    window.galaxyDownloaderController = heatHubDownloaderController; // backward compatibility alias
+
 
     // ── Main View Switching Engine ──────────────────────────────────
     function switchMainView(view) {
@@ -1465,6 +2422,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Pause any active background playback when switching views
+        if (view !== 'mediatools') {
+            if (dom.mtNativeVideo) dom.mtNativeVideo.pause();
+            if (dom.mtNativeAudio) dom.mtNativeAudio.pause();
+        }
+
         if (view === 'globe') {
             dom.gridScrollArea?.classList.add('hidden');
             dom.categoryFiltersContainer?.classList.add('hidden');
@@ -1474,6 +2437,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 globeRadar.init(dom.globeStage);
             }
             globeRadar.updatePoints(state.geoHotspots);
+            requestAnimationFrame(() => globeRadar.resizeHandler?.());
+            loadGeoHotspots();
         } else if (view === 'mediatools') {
             dom.globeView?.classList.add('hidden');
             dom.gridScrollArea?.classList.add('hidden');
@@ -1489,8 +2454,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Event Bindings ──────────────────────────────────────────────
     function bindEvents() {
-        // Init MediaTools Workbench
-        mediaToolsController.init();
+        // Init I18n Engine & User Center & Downloader
+        i18n.init();
+        userCenterController.init();
+        heatHubDownloaderController.init();
+        document.getElementById('mt-btn-retry-analysis')?.addEventListener('click', () => {
+            if (heatHubDownloaderController.activeData) heatHubDownloaderController.runAnalysis(heatHubDownloaderController.activeData);
+        });
 
         // Platform Navigation
         dom.navBtns.forEach(btn => {
@@ -1526,63 +2496,102 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Metric Mode Toggle
-        dom.btnMetricSingle.addEventListener('click', () => {
+        dom.btnMetricSingle?.addEventListener('click', () => {
             if (state.metricMode === 'single') return;
             state.metricMode = 'single';
             dom.btnMetricSingle.classList.add('active');
-            dom.btnMetricTopic.classList.remove('active');
+            dom.btnMetricTopic?.classList.remove('active');
             switchMainView('feed');
             loadData(true);
         });
 
-        dom.btnMetricTopic.addEventListener('click', () => {
+        dom.btnMetricTopic?.addEventListener('click', () => {
             if (state.metricMode === 'topic') return;
             state.metricMode = 'topic';
             dom.btnMetricTopic.classList.add('active');
-            dom.btnMetricSingle.classList.remove('active');
+            dom.btnMetricSingle?.classList.remove('active');
             switchMainView('feed');
             loadData(true);
         });
+        document.getElementById('btn-empty-topics')?.addEventListener('click', () => dom.btnMetricTopic?.click());
 
         // Back from Topic Drilldown
-        dom.btnBackToTopics.addEventListener('click', closeTopicDrilldown);
+        dom.btnBackToTopics?.addEventListener('click', closeTopicDrilldown);
 
         // Search Input
-        dom.searchInput.addEventListener('input', (e) => {
-            dom.searchClearBtn.classList.toggle('hidden', !e.target.value);
+        dom.searchInput?.addEventListener('input', (e) => {
+            dom.searchClearBtn?.classList.toggle('hidden', !e.target.value);
         });
 
-        dom.searchBtn.addEventListener('click', () => {
-            state.searchQuery = dom.searchInput.value.trim();
+        dom.searchBtn?.addEventListener('click', () => {
+            state.searchQuery = dom.searchInput?.value.trim() || '';
             switchMainView('feed');
             loadData(true);
         });
 
-        dom.searchInput.addEventListener('keydown', (e) => {
+        dom.searchInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                state.searchQuery = dom.searchInput.value.trim();
+                state.searchQuery = dom.searchInput?.value.trim() || '';
                 switchMainView('feed');
                 loadData(true);
             }
         });
 
-        dom.searchClearBtn.addEventListener('click', () => {
-            dom.searchInput.value = '';
-            dom.searchClearBtn.classList.add('hidden');
+        dom.searchClearBtn?.addEventListener('click', () => {
+            if (dom.searchInput) dom.searchInput.value = '';
+            dom.searchClearBtn?.classList.add('hidden');
             state.searchQuery = '';
             loadData(true);
         });
 
-        // Global Shortcut: Ctrl + K
+        // Global Shortcuts: Ctrl + K, Escape for modals, ArrowLeft/ArrowRight for Lightbox
         window.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
-                dom.searchInput.focus();
+                dom.searchInput?.focus();
+            } else if (e.key === 'Escape') {
+                if (dom.mtLightboxModal && !dom.mtLightboxModal.classList.contains('hidden')) {
+                    dom.mtLightboxModal.classList.add('hidden');
+                    return;
+                }
+                if (dom.playerModal && !dom.playerModal.classList.contains('hidden')) {
+                    closePlayerModal();
+                    return;
+                }
+                if (dom.settingsModal && !dom.settingsModal.classList.contains('hidden')) {
+                    dom.settingsModal.classList.add('hidden');
+                    return;
+                }
+                if (dom.profileModal && !dom.profileModal.classList.contains('hidden')) {
+                    dom.profileModal.classList.add('hidden');
+                    return;
+                }
+                if (dom.benefitsModal && !dom.benefitsModal.classList.contains('hidden')) {
+                    dom.benefitsModal.classList.add('hidden');
+                    return;
+                }
+                if (dom.authModal && !dom.authModal.classList.contains('hidden')) {
+                    dom.authModal.classList.add('hidden');
+                    return;
+                }
+                if (dom.userCenterDropdown && !dom.userCenterDropdown.classList.contains('hidden')) {
+                    dom.userCenterDropdown.classList.add('hidden');
+                    dom.userCenterWrapper?.classList.remove('active');
+                    return;
+                }
+                if (dom.detailDrawer && !dom.detailDrawer.classList.contains('hidden')) {
+                    dom.detailDrawer.classList.add('hidden');
+                    return;
+                }
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                if (dom.mtLightboxModal && !dom.mtLightboxModal.classList.contains('hidden')) {
+                    heatHubDownloaderController.navigateLightbox(e.key === 'ArrowLeft' ? -1 : 1);
+                }
             }
         });
 
         // Category Chips
-        dom.filterChips.forEach(chip => {
+        dom.filterChips?.forEach(chip => {
             chip.addEventListener('click', () => {
                 dom.filterChips.forEach(c => c.classList.remove('active'));
                 chip.classList.add('active');
@@ -1593,7 +2602,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Time Chips
-        dom.timeChips.forEach(chip => {
+        dom.timeChips?.forEach(chip => {
             chip.addEventListener('click', () => {
                 dom.timeChips.forEach(c => c.classList.remove('active'));
                 chip.classList.add('active');
@@ -1604,7 +2613,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // View Switcher (Feed vs 3D Globe vs MediaTools)
-        dom.viewSwitchBtns.forEach(btn => {
+        dom.viewSwitchBtns?.forEach(btn => {
             btn.addEventListener('click', () => {
                 const view = btn.dataset.view;
                 switchMainView(view);
@@ -1612,88 +2621,85 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Refresh Button
-        dom.refreshBtn.addEventListener('click', () => {
-            loadData(true);
+        dom.refreshBtn?.addEventListener('click', () => {
+            loadData(true, true);
         });
 
         // Scroll Pagination
-        dom.gridScrollArea.addEventListener('scroll', handleScrollPagination);
+        dom.gridScrollArea?.addEventListener('scroll', handleScrollPagination);
 
         // Player Modal Danmaku Controls
-        dom.modalDanmakuToggle.addEventListener('click', () => {
+        dom.modalDanmakuToggle?.addEventListener('click', () => {
             danmakuEngine.toggle(dom.modalDanmakuScreen, dom.modalDanmakuToggle);
         });
 
-        dom.modalDanmakuSend.addEventListener('click', sendModalDanmaku);
-        dom.modalDanmakuInput.addEventListener('keydown', (e) => {
+        dom.modalDanmakuSend?.addEventListener('click', sendModalDanmaku);
+        dom.modalDanmakuInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') sendModalDanmaku();
         });
 
         function sendModalDanmaku() {
-            const val = dom.modalDanmakuInput.value.trim();
+            const val = dom.modalDanmakuInput?.value.trim();
             if (!val) return;
             danmakuEngine.emit(dom.modalDanmakuScreen, val, true);
-            dom.modalDanmakuInput.value = '';
+            if (dom.modalDanmakuInput) dom.modalDanmakuInput.value = '';
             showToast('弹幕发射成功！', 'success');
         }
 
         // Close Player Modal
-        dom.closePlayerModalBtn.addEventListener('click', closePlayerModal);
-        dom.playerModal.addEventListener('click', (e) => {
+        dom.closePlayerModalBtn?.addEventListener('click', closePlayerModal);
+        dom.playerModal?.addEventListener('click', (e) => {
             if (e.target === dom.playerModal) closePlayerModal();
         });
 
         // Player Modal Action Tools
-        dom.modalCopyLinkBtn.addEventListener('click', () => copyVideoLink(state.activeVideo));
-        dom.modalSniffBtn.addEventListener('click', () => sniffVideoDirectStream(state.activeVideo, dom.modalSniffBtn));
-        dom.modalDownloadBtn.addEventListener('click', () => downloadVideo(state.activeVideo));
+        dom.modalCopyLinkBtn?.addEventListener('click', () => copyVideoLink(state.activeVideo));
+        dom.modalSniffBtn?.addEventListener('click', () => sniffVideoDirectStream(state.activeVideo, dom.modalSniffBtn));
+        dom.modalDownloadBtn?.addEventListener('click', () => downloadVideo(state.activeVideo));
 
         // Drawer Action Tools
         if (dom.btnCopyLink) dom.btnCopyLink.addEventListener('click', () => copyVideoLink(state.activeVideo));
         if (dom.btnParseStream) dom.btnParseStream.addEventListener('click', () => sniffVideoDirectStream(state.activeVideo, dom.btnParseStream));
         if (dom.btnDownloadVideo) dom.btnDownloadVideo.addEventListener('click', () => downloadVideo(state.activeVideo));
         if (dom.btnCopyStream) dom.btnCopyStream.addEventListener('click', () => {
-            navigator.clipboard.writeText(dom.streamUrlInput.value).then(() => {
+            navigator.clipboard.writeText(dom.streamUrlInput?.value || '').then(() => {
                 showToast('已复制视频直链地址！', 'success');
             });
         });
         if (dom.closeDrawerBtn) dom.closeDrawerBtn.addEventListener('click', () => {
-            dom.detailDrawer.classList.add('hidden');
+            dom.detailDrawer?.classList.add('hidden');
         });
 
         // Settings Modal
-        dom.settingsBtn.addEventListener('click', () => {
-            dom.settingsModal.classList.remove('hidden');
+        dom.settingsBtn?.addEventListener('click', () => {
+            dom.settingsModal?.classList.remove('hidden');
         });
-        dom.closeModalBtn.addEventListener('click', () => {
-            dom.settingsModal.classList.add('hidden');
+        dom.closeModalBtn?.addEventListener('click', () => {
+            dom.settingsModal?.classList.add('hidden');
         });
-        dom.settingsModal.addEventListener('click', (e) => {
+        dom.settingsModal?.addEventListener('click', (e) => {
             if (e.target === dom.settingsModal) dom.settingsModal.classList.add('hidden');
         });
-        dom.btnSaveSettings.addEventListener('click', saveSettings);
-        dom.proxyPills.forEach(pill => {
+        dom.btnSaveSettings?.addEventListener('click', saveSettings);
+        dom.proxyPills?.forEach(pill => {
             pill.addEventListener('click', () => {
-                dom.settingProxy.value = pill.dataset.url;
+                if (dom.settingProxy) dom.settingProxy.value = pill.dataset.url;
             });
         });
 
         // Auth Modal & Role Switching
-        dom.openLoginBtn.addEventListener('click', () => {
+        dom.openLoginBtn?.addEventListener('click', () => {
             dom.authModal.classList.remove('hidden');
         });
-        dom.closeAuthModalBtn.addEventListener('click', () => {
+        dom.closeAuthModalBtn?.addEventListener('click', () => {
             dom.authModal.classList.add('hidden');
         });
-        dom.authModal.addEventListener('click', (e) => {
+        dom.authModal?.addEventListener('click', (e) => {
             if (e.target === dom.authModal) dom.authModal.classList.add('hidden');
         });
 
-        dom.btnRoleAdmin.addEventListener('click', () => switchRole('admin'));
-        dom.btnRolePro.addEventListener('click', () => switchRole('pro'));
-        dom.btnRoleDemo.addEventListener('click', () => switchRole('user'));
 
-        dom.authTabs.forEach(tab => {
+        dom.authTabs?.forEach(tab => {
             tab.addEventListener('click', () => {
                 dom.authTabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
@@ -1704,10 +2710,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Login Form
-        dom.loginForm.addEventListener('submit', async (e) => {
+        dom.loginForm?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = dom.loginUsername.value.trim();
-            const password = dom.loginPassword.value.trim();
+            const password = dom.loginPassword.value;
             try {
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
@@ -1730,11 +2736,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Register Form
-        dom.registerForm.addEventListener('submit', async (e) => {
+        dom.registerForm?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = dom.regUsername.value.trim();
             const nickname = dom.regNickname.value.trim() || username;
-            const password = dom.regPassword.value.trim();
+            const password = dom.regPassword.value;
             try {
                 const res = await fetch('/api/auth/register', {
                     method: 'POST',
@@ -1756,24 +2762,63 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Logout
-        dom.authLogoutBtn.addEventListener('click', async () => {
-            try {
-                await fetch('/api/auth/logout', { method: 'POST' });
-            } catch (e) {}
-            setUserSession({
-                username: 'demo',
-                nickname: '体验用户',
-                role: 'user',
-                avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=demo'
-            });
-            showToast('已退出登录', 'info');
+        // Legacy Logout button in auth if any
+        dom.authLogoutBtn?.addEventListener('click', () => {
+            userCenterController.logout();
         });
     }
 
     // ── Application Bootstrapping ───────────────────────────────────
+    async function loadPlatformCapabilities() {
+        try {
+            const result = await readApi('/api/platforms');
+            for (const item of result.list || []) {
+                const button = document.querySelector('.nav-btn[data-platform="' + item.platform + '"]');
+                if (!button) continue;
+                const subtitle = button.querySelector('.nav-btn-sub');
+                const status=item.verification?.videos?.status;
+                if (subtitle) subtitle.textContent = status==='unavailable' ? '视频源受限 · 查看状态' : item.label;
+                button.title = item.label + '；排名仅覆盖实际检索作品，非全站历史总榜。';
+            }
+        } catch { /* 平台说明失败不阻止真实作品加载。 */ }
+    }
+
     async function init() {
         bindEvents();
+        for(const id of ['system-status-modal','account-edit-modal']) {
+            const modal=document.getElementById(id);
+            modal?.addEventListener('click',event=>{if(event.target===modal)modal.classList.add('hidden');});
+        }
+        window.addEventListener('keydown',event=>{if(event.key==='Escape')for(const id of ['system-status-modal','account-edit-modal'])document.getElementById(id)?.classList.add('hidden');});
+        document.getElementById('btn-system-status')?.addEventListener('click', async () => {
+            document.getElementById('system-status-modal').classList.remove('hidden');
+            const body=document.getElementById('system-status-body'); body.textContent='正在读取当前实际状态…';
+            try {
+                const data=await readApi('/api/system/status');
+                const statuses={ok:'已读取真实数据',partial:'部分源失败',cached:'真实缓存（非实时）',unavailable:'未取得数据','not-verified':'尚未实测'};
+                body.innerHTML='<p>账号为真实服务端会话；没有演示提权。语音模型配置：'+(data.media.asr?'存在':'缺失')+'；语义模型配置：'+(data.media.localAnalysis?'存在':'缺失')+'。模型存在不代表本次分析已通过，结果需查看实际任务。</p><p>'+escapeHtml(data.note)+'</p>'+
+                    data.platforms.map(p=>'<div class="source-check"><strong>'+escapeHtml(PLATFORM_CONFIG[p.platform]?.name || p.platform)+'</strong><p>视频：'+escapeHtml(statuses[p.verification.videos.status] || p.verification.videos.status)+'；话题：'+(p.topics==='unavailable'?'尚未接通':escapeHtml(statuses[p.verification.topics.status] || p.verification.topics.status))+'</p><p>'+escapeHtml(p.verification.videos.message || p.label)+'</p></div>').join('');
+            } catch(error){body.textContent='状态读取失败：'+error.message;}
+        });
+        document.getElementById('close-system-status')?.addEventListener('click',()=>document.getElementById('system-status-modal').classList.add('hidden'));
+        document.getElementById('btn-account-edit')?.addEventListener('click', () => {
+            if (!requireLogin()) return;
+            dom.profileModal?.classList.add('hidden');
+            document.getElementById('profile-edit-nickname').value = state.user.nickname;
+            document.getElementById('account-edit-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-account-edit')?.addEventListener('click', () => document.getElementById('account-edit-modal').classList.add('hidden'));
+        document.getElementById('profile-edit-form')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            try { const data = await readApi('/api/account/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: document.getElementById('profile-edit-nickname').value }) }); setUserSession(data.user); showToast('昵称已在服务端保存', 'success'); }
+            catch (error) { showToast(error.message, 'error'); }
+        });
+        document.getElementById('account-password-form')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            try { const data = await readApi('/api/account/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentPassword: document.getElementById('account-current-password').value, password: document.getElementById('account-new-password').value }) }); setUserSession(data.user); event.target.reset(); showToast('密码已修改，旧会话已失效', 'success'); }
+            catch (error) { showToast(error.message, 'error'); }
+        });
+        loadPlatformCapabilities();
         await initUserSession();
         await loadSettings();
         await loadData(true);

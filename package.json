@@ -1,15 +1,24 @@
 {
-  "name": "hotpot-aggregator",
+  "name": "heathub-aggregator",
   "version": "1.0.0",
-  "description": "Real-time Hot Video Aggregator & Learning System",
+  "description": "万热观象 (Heat Hub) - 全网多平台实时热点监测与全能媒体工作台",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/video-pipeline.test.js && node test/geo-hotspots.test.js && node test/api-smoke.test.js"
+    "test": "node test/video-pipeline.test.js && node test/geo-hotspots.test.js && node test/transcript-content.test.js && node test/platform-rankings.test.js && node test/media-identity.test.js && node test/downloader-integration.test.js && node test/accounts.test.js && node test/api-smoke.test.js",
+    "test:live": "node test/live-media.test.js",
+    "test:rankings": "node test/live-rankings.test.js",
+    "test:rankings-ui": "node test/rankings-ui.test.js",
+    "test:ui": "node test/browser-ui.test.js",
+    "test:accounts-ui": "node test/accounts-ui.test.js",
+    "test:system": "node test/system-audit.test.js",
+    "setup:media": "powershell -ExecutionPolicy Bypass -File scripts/setup-media.ps1",
+    "account:create-admin": "node scripts/create-admin.js"
   },
   "keywords": [
-    "hotpot",
+    "heathub",
+    "万热观象",
     "trending",
     "video",
     "downloader",

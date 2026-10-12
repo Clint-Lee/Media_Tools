@@ -10,6 +10,7 @@ function run() {
 
     const newYork = inferVideoLocation({ title: 'A creator guide to New York street videos' });
     assert.equal(newYork.city, '纽约');
+    assert.equal(inferVideoLocation({ title: '日本科学新闻' }), null, '国家不能自动归为首都');
 
     const videos = attachVideoLocations([
         { id: '1', title: '东京街头观察' },

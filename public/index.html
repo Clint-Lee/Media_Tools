@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='.9em' font-size='56'%3E🔥%3C/text%3E%3C/svg%3E">
-    <title>HotPot | 全球多平台实时爆款视频热度监测与分析系统</title>
+    <title>万热观象 | Heat Hub - 全球多平台实时热点监测与全能媒体工作台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -22,8 +22,8 @@
                     <i class="fa-solid fa-fire-flame-curved logo-icon"></i>
                 </div>
                 <div class="logo-info">
-                    <span class="logo-text">HotPot</span>
-                    <span class="logo-sub">RADAR v2.6</span>
+                    <span class="logo-text">万热观象</span>
+                    <span class="logo-sub">HEAT HUB</span>
                 </div>
                 <div class="live-status-pill">
                     <span class="live-dot"></span>
@@ -40,7 +40,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">哔哩哔哩</span>
-                        <span class="nav-btn-sub">B站全站热门</span>
+                        <span class="nav-btn-sub">官方榜单与高播放检索</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -62,7 +62,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">YouTube</span>
-                        <span class="nav-btn-sub">全球顶流长短视频</span>
+                        <span class="nav-btn-sub">公开搜索 / 官方 API</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -73,7 +73,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">TikTok</span>
-                        <span class="nav-btn-sub">海外现象级趋势</span>
+                        <span class="nav-btn-sub">真实搜索 · 访问受限时提示</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -84,7 +84,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">Twitter / X</span>
-                        <span class="nav-btn-sub">全球即时话题榜</span>
+                        <span class="nav-btn-sub">官方 API · 需授权</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -95,7 +95,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">小红书</span>
-                        <span class="nav-btn-sub">爆款笔记与视频</span>
+                        <span class="nav-btn-sub">视频搜索 · 需登录态</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -106,20 +106,20 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">快手热门</span>
-                        <span class="nav-btn-sub">老铁高热度内容</span>
+                        <span class="nav-btn-sub">视频搜索 · 需登录态</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
 
                 <div class="sidebar-section-title">CREATOR WORKBENCH</div>
 
-                <button class="nav-btn nav-btn-mediatools" id="btn-nav-mediatools" data-view="mediatools" title="万能视频提取与 AI 深度拆解">
+                <button class="nav-btn nav-btn-mediatools" id="btn-nav-mediatools" data-view="mediatools" title="万能流媒体解析与极速下载">
                     <div class="nav-btn-icon-box mediatools-box">
                         <i class="fa-solid fa-wand-magic-sparkles nav-icon mediatools-color"></i>
                     </div>
                     <div class="nav-btn-text">
-                        <span class="nav-btn-name">MediaTools 工作台</span>
-                        <span class="nav-btn-sub">万能提取 · AI拆解 · 物理下载</span>
+                        <span class="nav-btn-name">万能解析下载</span>
+                        <span class="nav-btn-sub">原画无水印 · 批量图文 · 脚本台词</span>
                     </div>
                     <span class="nav-tool-badge">PRO</span>
                 </button>
@@ -127,8 +127,8 @@
 
             <div class="sidebar-footer">
                 <button id="settings-btn" class="footer-btn">
-                    <i class="fa-solid fa-network-wired"></i>
-                    <span>代理与网络配置</span>
+                    <i class="fa-solid fa-gear"></i>
+                    <span>全局设置与偏好</span>
                     <span id="sidebar-proxy-dot" class="proxy-dot"></span>
                 </button>
             </div>
@@ -142,17 +142,17 @@
                 <!-- Platform Name & Status -->
                 <div class="header-platform-box">
                     <h1 id="platform-title">哔哩哔哩</h1>
-                    <span class="platform-badge-glow" id="platform-status-badge">实时聚合中</span>
+                    <span class="platform-badge-glow" id="platform-status-badge">官方榜单 / 高播放检索</span>
                 </div>
 
                 <!-- Unified Smart Search Bar & Metric Mode Toggle -->
                 <div class="header-search-section">
                     <div class="metric-mode-toggle" title="切换数据统计维度">
                         <button class="metric-btn active" data-metric="single" id="btn-metric-single">
-                            <i class="fa-solid fa-play"></i> <span>单视频热度</span>
+                            <i class="fa-solid fa-play"></i> <span>视频指标排行</span>
                         </button>
                         <button class="metric-btn" data-metric="topic" id="btn-metric-topic">
-                            <i class="fa-solid fa-fire"></i> <span>全网话题热度</span>
+                            <i class="fa-solid fa-fire"></i> <span>官方话题排行</span>
                         </button>
                     </div>
 
@@ -171,15 +171,15 @@
                     <div class="view-switcher" role="group" aria-label="内容视图">
                         <button class="view-switch-btn active" data-view="feed" title="视频瀑布流榜单">
                             <i class="fa-solid fa-layer-group"></i>
-                            <span>榜单大盘</span>
+                            <span data-i18n="nav_feed">榜单大盘</span>
                         </button>
                         <button class="view-switch-btn" data-view="globe" title="3D 空间热点地球">
                             <i class="fa-solid fa-earth-asia"></i>
-                            <span>热点地球</span>
+                            <span data-i18n="nav_globe">热点地球</span>
                         </button>
-                        <button class="view-switch-btn btn-view-mediatools" data-view="mediatools" title="MediaTools 万能提取与 AI 拆解工作台">
+                        <button class="view-switch-btn btn-view-mediatools" data-view="mediatools" title="万热观象 · 万能媒体解析与二创工作台">
                             <i class="fa-solid fa-wand-magic-sparkles"></i>
-                            <span>MediaTools 工作台</span>
+                            <span data-i18n="nav_downloader">万能解析下载</span>
                         </button>
                     </div>
 
@@ -188,26 +188,70 @@
                         <i class="fa-solid fa-arrows-rotate"></i>
                     </button>
 
-                    <!-- User Identity Pill -->
-                    <div class="user-identity-card" id="user-identity-card">
-                        <div class="user-info-group hidden" id="user-logged-in-box">
-                            <img id="user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=user" alt="Avatar" class="user-avatar">
-                            <div class="user-details">
-                                <div class="user-top-row">
-                                    <span id="user-nickname" class="user-nickname">体验用户</span>
-                                    <span id="user-role-badge" class="role-badge role-user">USER</span>
+                    <!-- User Center Pill & Interactive Dropdown Menu -->
+                    <div class="user-center-wrapper" id="user-center-wrapper">
+                        <div class="user-identity-card" id="user-identity-card" title="点击展开个人中心菜单">
+                            <div class="user-info-group hidden" id="user-logged-in-box">
+                                <img id="user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=user" alt="Avatar" class="user-avatar">
+                                <div class="user-details">
+                                    <div class="user-top-row">
+                                        <span id="user-nickname" class="user-nickname">体验用户</span>
+                                        <span id="user-role-badge" class="role-badge role-user">USER</span>
+                                    </div>
                                 </div>
+                                <i class="fa-solid fa-chevron-down user-dropdown-icon"></i>
                             </div>
-                            <button id="auth-logout-btn" class="icon-btn-ghost" title="退出登录">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                            </button>
+
+                            <div class="user-login-trigger" id="user-login-trigger">
+                                <button id="open-login-btn" class="cyber-btn-accent">
+                                    <i class="fa-solid fa-user-shield"></i>
+                                    <span data-i18n="btn_user_center">个人中心 / 登录</span>
+                                </button>
+                            </div>
                         </div>
 
-                        <div class="user-login-trigger" id="user-login-trigger">
-                            <button id="open-login-btn" class="cyber-btn-accent">
-                                <i class="fa-solid fa-user-shield"></i>
-                                <span>登录 / 角色</span>
-                            </button>
+                        <!-- User Center Rich Dropdown Menu -->
+                        <div class="user-center-dropdown hidden" id="user-center-dropdown">
+                            <div class="dropdown-header">
+                                <img id="dropdown-user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=user" alt="Avatar" class="dropdown-avatar">
+                                <div class="dropdown-user-meta">
+                                    <div class="dropdown-name-box">
+                                        <strong id="dropdown-nickname">体验用户</strong>
+                                        <span id="dropdown-role-badge" class="role-badge role-user">USER</span>
+                                    </div>
+                                    <span class="dropdown-quota-badge" id="dropdown-quota-badge">
+                                        <i class="fa-solid fa-bolt"></i> 今日额度: <strong id="dropdown-quota-count">由服务端读取</strong>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="dropdown-menu-list">
+                                <button class="dropdown-item" id="menu-btn-profile">
+                                    <i class="fa-regular fa-id-badge item-icon"></i>
+                                    <span data-i18n="menu_profile">个人信息 (Profile)</span>
+                                </button>
+                                <button class="dropdown-item" id="menu-btn-benefits">
+                                    <i class="fa-solid fa-crown item-icon crown-gold"></i>
+                                    <span data-i18n="menu_benefits">个人权益与配额 (Benefits)</span>
+                                    <span class="item-tag-vip">额度</span>
+                                </button>
+                                <button class="dropdown-item" id="menu-btn-history">
+                                    <i class="fa-solid fa-clock-rotate-left item-icon"></i>
+                                    <span data-i18n="menu_history">媒体处理记录 (History)</span>
+                                </button>
+                                <button class="dropdown-item" id="menu-btn-settings">
+                                    <i class="fa-solid fa-gear item-icon"></i>
+                                    <span data-i18n="menu_settings">系统设置 (语言/代理)</span>
+                                </button>
+                                <button class="dropdown-item highlight" id="menu-btn-switch-role">
+                                    <i class="fa-solid fa-users-gear item-icon"></i>
+                                    <span>登录其他账号</span>
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item text-danger" id="menu-btn-logout">
+                                    <i class="fa-solid fa-right-from-bracket item-icon"></i>
+                                    <span data-i18n="menu_logout">退出登录</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -216,7 +260,7 @@
             <!-- Compact Subnav Filter Bar (Category + Time in One Row) -->
             <div class="subnav-filter-bar" id="category-filters-container">
                 <div class="category-filters-scroll">
-                    <button class="filter-chip active" data-category="all"><i class="fa-solid fa-fire"></i> 全部热门</button>
+                    <button class="filter-chip active" data-category="all"><i class="fa-solid fa-fire"></i> 全部分类</button>
                     <button class="filter-chip" data-category="comedy"><i class="fa-solid fa-masks-theater"></i> 搞笑幽默</button>
                     <button class="filter-chip" data-category="ent"><i class="fa-solid fa-clapperboard"></i> 娱乐明星</button>
                     <button class="filter-chip" data-category="fashion"><i class="fa-solid fa-shirt"></i> 时尚美妆</button>
@@ -230,8 +274,8 @@
                 <div class="filter-divider-vertical"></div>
 
                 <div class="time-filters-group">
-                    <span class="time-label"><i class="fa-regular fa-clock"></i> 时效:</span>
-                    <button class="time-chip active" data-time="all">全部</button>
+                    <span class="time-label"><i class="fa-regular fa-clock"></i> 发布:</span>
+                    <button class="time-chip active" data-time="all">全部时间</button>
                     <button class="time-chip" data-time="3days">3天内</button>
                     <button class="time-chip" data-time="7days">7天内</button>
                     <button class="time-chip" data-time="1month">1个月内</button>
@@ -240,34 +284,39 @@
             </div>
 
             <!-- 3D Globe Radar View -->
+            <div id="source-status" class="source-status" role="status" aria-live="polite">正在读取平台真实数据…</div>
+            <div class="system-status-entry"><button id="btn-system-status" class="cyber-btn-secondary">数据源与功能实测状态</button></div>
+            <div class="ranking-context" id="ranking-context">
+                <span id="ranking-scope">正在核验榜单范围…</span>
+                <details id="source-details" class="hidden"><summary>查看数据覆盖</summary><div id="source-details-content"></div></details>
+            </div>
             <section class="globe-view hidden" id="globe-view" aria-label="视频来源热点地球">
                 <div class="globe-stage" id="globe-stage"></div>
                 <div class="globe-topbar">
                     <div>
                         <span class="globe-eyebrow"><i class="fa-solid fa-satellite-dish"></i> GLOBAL GEO RADAR</span>
-                        <h2>全球 48 大热点城市空间分布图谱</h2>
-                        <p>实时提取的内容地域标签与城市热度传播能级梯度</p>
+                        <h2>视频关联城市分布</h2>
+                        <p>按当前视频样本中的明确地名统计，不代表作者所在地或全网总量</p>
                     </div>
                     <div class="globe-metrics">
-                        <div class="globe-metric"><strong id="geo-city-count">48</strong><span>监测城市</span></div>
-                        <div class="globe-metric"><strong id="geo-video-count">1580.4万篇</strong><span>总传播量</span></div>
-                        <div class="globe-metric"><strong id="geo-coverage">空间网络</strong><span>多梯度识别</span></div>
+                        <div class="globe-metric"><strong id="geo-city-count">0</strong><span>关联城市</span></div>
+                        <div class="globe-metric"><strong id="geo-video-count">0条</strong><span>匹配视频</span></div>
+                        <div class="globe-metric"><strong id="geo-coverage">0</strong><span>当前视频样本数</span></div>
                     </div>
                 </div>
                 <aside class="hotspot-panel">
                     <div class="hotspot-panel-header">
                         <div>
                             <span>城市热度梯队排行榜</span>
-                            <small>按城市关联作品数与传播能级</small>
+                            <small>按当前样本中的关联视频数排序</small>
                         </div>
                         <div class="hotspot-live"><span></span> RADAR LIVE</div>
                     </div>
                     <div class="hotspot-list" id="hotspot-list"></div>
                     <div class="hotspot-legend">
-                        <span><i class="legend-dot high"></i>爆发 (>40万)</span>
-                        <span><i class="legend-dot medium"></i>活跃 (15~40万)</span>
-                        <span><i class="legend-dot normal"></i>常规 (5~15万)</span>
-                        <span><i class="legend-dot low"></i>萌芽 (&lt;5万)</span>
+                        <span><i class="legend-dot high"></i>较多 (&gt;最大值65%)</span>
+                        <span><i class="legend-dot medium"></i>中等 (30~65%)</span>
+                        <span><i class="legend-dot normal"></i>较少 (≤30%)</span>
                     </div>
                 </aside>
                 <div class="globe-empty hidden" id="globe-empty">
@@ -291,6 +340,7 @@
                     <i class="fa-regular fa-folder-open empty-icon"></i>
                     <h3>暂无匹配内容</h3>
                     <p>未在该筛选组合下找到数据，请更换搜索词或重置时效筛选。</p>
+                    <button id="btn-empty-topics" class="btn-back-topics hidden">查看该平台实时话题榜</button>
                 </div>
 
                 <!-- View 1: Single Video Cards Grid -->
@@ -308,7 +358,7 @@
                         <div class="drilldown-title-box">
                             <span class="drilldown-tag" id="drilldown-topic-tag">🔥 爆款话题</span>
                             <h2 id="drilldown-topic-title">话题名称</h2>
-                            <p id="drilldown-topic-meta">全网热度: 26.8亿 · 关联作品从高到低排序</p>
+                            <p id="drilldown-topic-meta">关联视频按当前发布时间条件筛选</p>
                         </div>
                     </div>
                     <div class="drilldown-cards-grid" id="drilldown-cards-grid"></div>
@@ -323,232 +373,311 @@
                 <!-- Bottom End Hint -->
                 <div id="end-hint" class="end-hint hidden">
                     <div class="end-hint-line"></div>
-                    <span id="end-hint-text">已加载全部数据（最多展示 100 条）</span>
+                    <span id="end-hint-text">当前数据源样本已加载完毕 · 不代表全站全部作品</span>
                     <div class="end-hint-line"></div>
                 </div>
             </div>
 
-            <!-- View 4: MediaTools Universal Video Extractor & AI Analyzer Workbench -->
-            <section class="mediatools-workspace hidden" id="mediatools-view">
-                <!-- Workbench Hero Banner -->
-                <div class="mediatools-hero">
-                    <div class="hero-glow-blob"></div>
-                    <div class="hero-content">
-                        <div class="hero-badge">
-                            <i class="fa-solid fa-bolt"></i> MEDIATOOLS CORE SUITE · 本地引擎已就绪
-                        </div>
-                        <h2 class="hero-title">MediaTools 万能提取 · AI 深度爆款拆解工作台</h2>
-                        <p class="hero-subtitle">
-                            支持 B站/抖音/YouTube/小红书/快手/TikTok/Twitter 全网链接。一键穿透防盗链，拦截 1080P/4K 高清无水印视频流，AI 智能剖析黄金看点与二创脚本。
-                        </p>
-                        
-                        <!-- Quick Platform Pills -->
-                        <div class="hero-platforms-bar">
-                            <span class="plat-pill"><i class="fa-brands fa-bilibili" style="color:#fb7299"></i> 哔哩哔哩</span>
-                            <span class="plat-pill"><i class="fa-solid fa-music" style="color:#22d3ee"></i> 抖音/TikTok</span>
-                            <span class="plat-pill"><i class="fa-brands fa-youtube" style="color:#ff0033"></i> YouTube</span>
-                            <span class="plat-pill"><i class="fa-solid fa-bookmark" style="color:#ff2442"></i> 小红书</span>
-                            <span class="plat-pill"><i class="fa-solid fa-circle-play" style="color:#ff5000"></i> 快手</span>
-                            <span class="plat-pill"><i class="fa-brands fa-x-twitter" style="color:#38bdf8"></i> Twitter / X</span>
-                        </div>
+            <!-- View 4: Heat Hub Universal Stream Extraction, AI Insights & Download Workbench -->
+            <section class="galaxy-workspace hidden" id="mediatools-view">
+                <!-- Hero Header -->
+                <div class="galaxy-hero">
+                    <div class="galaxy-hero-glow"></div>
+                    <div class="galaxy-hero-badge">
+                        <i class="fa-solid fa-bolt-lightning"></i> <span data-i18n="hero_badge">万热观象 · HEAT HUB 全能媒体工作台</span>
                     </div>
-
-                    <!-- User Role & Quota Card -->
-                    <div class="workbench-quota-card">
-                        <div class="quota-header">
-                            <span><i class="fa-solid fa-shield-halved"></i> 提取引擎授权</span>
-                            <span id="mt-role-badge" class="role-badge role-admin">ADMIN</span>
-                        </div>
-                        <div class="quota-body">
-                            <div class="quota-stat">
-                                <strong id="mt-quota-count">无限次</strong>
-                                <small>今日可用提取额度</small>
-                            </div>
-                            <div class="quota-actions">
-                                <button id="mt-quick-role-btn" class="btn-role-switch" title="切换身份体验">
-                                    <i class="fa-solid fa-users-gear"></i> 切换角色
-                                </button>
-                                <button id="mt-open-logs-btn" class="btn-role-logs" title="查看提取审计日志">
-                                    <i class="fa-solid fa-clock-rotate-left"></i> 审计日志
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <h2 class="galaxy-hero-title" data-i18n="hero_title">万能音视频解析与二创工作台</h2>
+                    <p class="galaxy-hero-subtitle" data-i18n="hero_subtitle">
+                        解析平台允许访问的媒体 · 有声 MP4 / 原声 MP3 · 真实字幕与语音转写 · 基于内容的重点分析。登录、地区与平台访问限制会影响可用性。
+                    </p>
                 </div>
 
-                <!-- Universal Link Sniffer Box -->
-                <div class="sniffer-card">
-                    <div class="sniffer-input-wrapper">
-                        <i class="fa-solid fa-link sniffer-icon"></i>
-                        <input type="text" id="mt-input-url" placeholder="粘贴视频链接 (如: https://www.bilibili.com/video/BV1bW411n7fY 或 抖音/小红书/YouTube分享链接)..." autocomplete="off">
-                        <button id="mt-paste-btn" class="sniffer-action-btn" title="从剪贴板粘贴">
-                            <i class="fa-regular fa-clipboard"></i> <span>粘贴</span>
-                        </button>
-                        <button id="mt-clear-btn" class="sniffer-action-btn hidden" title="清空输入框">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                        <button id="mt-extract-btn" class="sniffer-submit-btn">
-                            <i class="fa-solid fa-bolt"></i> <span>一键解析提取</span>
-                        </button>
+                <!-- Main Glassmorphism Sniffer & Input Card -->
+                <div class="galaxy-input-card">
+                    <div class="galaxy-input-container">
+                        <textarea id="mt-input-url" class="galaxy-textarea" placeholder="在此粘贴视频/图文链接或整段分享口令 (支持抖音分享口令、B站BV/av号、小红书图文/视频、快手、YouTube 等)..." rows="3" autocomplete="off"></textarea>
+
+                        <div class="galaxy-input-actions">
+                            <div class="input-actions-left">
+                                <button id="mt-paste-btn" type="button" class="galaxy-btn-ghost" title="从剪贴板一键读取并填充">
+                                    <i class="fa-regular fa-clipboard"></i> <span>一键粘贴</span>
+                                </button>
+                                <button id="mt-clear-btn" type="button" class="galaxy-btn-ghost text-danger hidden" title="清空内容">
+                                    <i class="fa-regular fa-trash-can"></i> <span>清空</span>
+                                </button>
+                            </div>
+                            <div class="input-actions-right">
+                                <button id="mt-extract-btn" type="button" class="galaxy-btn-primary">
+                                    <i class="fa-solid fa-bolt"></i> <span>开始极速解析</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Platform Badges Row -->
+                    <div class="galaxy-platforms-grid">
+                        <div class="plat-chip"><img src="/platform-icons/douyin.svg" alt="抖音" class="plat-svg"><span>抖音短视频/图文</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/bilibili.svg" alt="B站" class="plat-svg"><span>哔哩哔哩 (多P/高清)</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/xiaohongshu.svg" alt="小红书" class="plat-svg"><span>小红书 (视频/原图集)</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/kuaishou.svg" alt="快手" class="plat-svg"><span>快手短视频</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/youtube.svg" alt="YouTube" class="plat-svg"><span>YouTube</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/tiktok.svg" alt="TikTok" class="plat-svg"><span>TikTok</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/x.svg" alt="X/Twitter" class="plat-svg"><span>Twitter / X</span></div>
+                        <div class="plat-chip"><img src="/platform-icons/instagram.svg" alt="Instagram" class="plat-svg"><span>Instagram</span></div>
                     </div>
 
                     <!-- Quick Demo Links -->
-                    <div class="sniffer-sample-chips">
-                        <span class="sample-label"><i class="fa-solid fa-fire"></i> 快速体验样例:</span>
-                        <button class="sample-chip" data-url="https://www.bilibili.com/video/BV1bW411n7fY"><i class="fa-brands fa-bilibili" style="color:#fb7299"></i> B站·念诗之王</button>
-                        <button class="sample-chip" data-url="https://www.bilibili.com/video/BV1yt4y1Q7SS"><i class="fa-brands fa-bilibili" style="color:#fb7299"></i> B站·敢杀我的马</button>
-                        <button class="sample-chip" data-url="https://www.douyin.com/video/7391823912831293821"><i class="fa-solid fa-music" style="color:#22d3ee"></i> 抖音·热门神曲</button>
-                        <button class="sample-chip" data-url="https://www.youtube.com/watch?v=kJQP7kiw5Fk"><i class="fa-brands fa-youtube" style="color:#ff0033"></i> YouTube·Despacito</button>
+                    <div class="galaxy-sample-row">
+                        <span class="sample-title"><i class="fa-solid fa-fire-flame-curved"></i> 快速体验样例:</span>
+                        <button class="sample-chip" data-url="https://www.bilibili.com/video/BV1bW411n7fY"><img src="/platform-icons/bilibili.svg" class="plat-svg-sm"> B站·念诗之王</button>
+                        <button class="sample-chip" data-url="https://www.bilibili.com/video/BV1yt4y1Q7SS"><img src="/platform-icons/bilibili.svg" class="plat-svg-sm"> B站·敢杀我的马</button>
+                        <button class="sample-chip" data-url="https://www.bilibili.com/video/BV1GGaZ6AEzJ"><img src="/platform-icons/bilibili.svg" class="plat-svg-sm"> B站·产品功能讲解（52秒）</button>
                     </div>
                 </div>
 
                 <!-- Extraction Progress / Loading State -->
-                <div id="mt-loading-state" class="mt-loader-card hidden">
-                    <div class="neon-spinner"></div>
-                    <h4 id="mt-loading-step">正在穿透反爬防御，解析视频流元数据...</h4>
-                    <p>正在拦截物理无水印直链并触发 AI 深度爆款结构提炼</p>
+                <div id="mt-loading-state" class="galaxy-loader-card hidden">
+                    <div class="galaxy-neon-spinner"></div>
+                    <h4 id="mt-loading-step">正在读取实际作品与媒体信息，清晰度以平台返回为准…</h4>
+                    <p>默认本地识别与分析；解析时仅向视频所属平台请求媒体</p>
                 </div>
 
-                <!-- Extraction Results Container -->
-                <div class="mediatools-results-grid hidden" id="mt-results-grid">
-                    <!-- Left Column: Video Preview Player & Actions -->
-                    <div class="results-player-card">
-                        <div class="result-card-header">
-                            <div class="result-title-group">
-                                <span id="mt-res-platform" class="platform-badge">Bilibili</span>
-                                <h3 id="mt-res-title">视频标题正在解析中...</h3>
+                <!-- Error Feedback Box -->
+                <div id="mt-error-box" class="galaxy-error-card hidden">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="mt-error-msg">解析失败，请检查链接有效性</span>
+                </div>
+
+                <!-- Dynamic Extraction Results Container -->
+                <div class="galaxy-results-container hidden" id="mt-results-container">
+
+                    <!-- Result Panel 1: Video / Multi-P / Muxed Streams -->
+                    <div class="galaxy-result-panel" id="mt-panel-video">
+                        <div class="panel-header-row">
+                            <div class="panel-meta-left">
+                                <span id="mt-res-platform" class="galaxy-platform-tag">Bilibili</span>
+                                <h3 id="mt-res-title" class="panel-title">视频标题正在解析中...</h3>
                             </div>
-                            <a id="mt-res-origin-link" class="cyber-btn-origin" target="_blank" rel="noopener noreferrer">
-                                <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>在原平台打开</span>
+                            <button id="mt-btn-close-result" class="btn-close-panel" title="关闭当前结果">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <!-- Video Player with Range Proxy Support -->
+                        <div class="galaxy-player-box" id="mt-player-box">
+                            <video id="mt-native-video" controls playsinline class="galaxy-video-player"></video>
+                        </div>
+
+                        <!-- Multi-P Pages / Episodes Selector (for Bilibili multi-part videos) -->
+                        <div class="galaxy-pages-wrapper hidden" id="mt-pages-wrapper">
+                            <div class="pages-header">
+                                <span><i class="fa-solid fa-list-ol"></i> 视频选集 / 分P列表 (<span id="mt-pages-count">0</span>)</span>
+                            </div>
+                            <div class="pages-pill-grid" id="mt-pages-list"></div>
+                        </div>
+
+                        <!-- Video Attributes & Author Info -->
+                        <div class="galaxy-attributes-bar">
+                            <div class="attr-chip"><i class="fa-regular fa-user"></i> <span id="mt-res-author">--</span></div>
+                            <div class="attr-chip"><i class="fa-regular fa-clock"></i> <span id="mt-res-duration">--</span></div>
+                            <div class="attr-chip highlight"><i class="fa-solid fa-shield-halved"></i> <span>实际可用清晰度 · 原声音轨</span></div>
+                            <a id="mt-res-origin-link" class="attr-chip link-chip" target="_blank" rel="noopener noreferrer">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>原平台打开</span>
                             </a>
                         </div>
 
-                        <!-- Embed Player Box -->
-                        <div class="mt-player-wrapper" id="mt-player-wrapper">
-                            <video id="mt-native-video" controls autoplay playsinline class="mt-video-player"></video>
-                        </div>
-
-                        <!-- Video Attributes Bar -->
-                        <div class="mt-attributes-bar">
-                            <div class="attr-item"><i class="fa-regular fa-user"></i> <span id="mt-res-author">--</span></div>
-                            <div class="attr-item"><i class="fa-solid fa-gauge-high"></i> <span id="mt-res-quality">1080P 超清物理流</span></div>
-                            <div class="attr-item"><i class="fa-regular fa-clock"></i> <span id="mt-res-duration">--</span></div>
-                            <div class="attr-item"><i class="fa-solid fa-lock-open" style="color:#4ade80"></i> <span>已穿透无水印</span></div>
-                        </div>
-
                         <!-- Download Action Buttons Bar -->
-                        <div class="mt-download-actions">
-                            <button id="mt-btn-download-mp4" class="cyber-btn-primary">
-                                <i class="fa-solid fa-cloud-arrow-down"></i> <span>一键物理高速下载 (MP4)</span>
+                        <div class="galaxy-action-buttons">
+                            <button id="mt-btn-download-mp4" class="galaxy-action-btn primary-gradient">
+                                <i class="fa-solid fa-cloud-arrow-down"></i> <span>生成有声视频 (MP4)</span>
                             </button>
-                            <button id="mt-btn-copy-stream" class="cyber-btn-secondary">
-                                <i class="fa-regular fa-copy"></i> <span>复制无水印直链</span>
+                            <button id="mt-btn-download-mp3" class="galaxy-action-btn secondary-gradient">
+                                <i class="fa-solid fa-music"></i> <span data-i18n="btn_extract_mp3">提取纯音频 (MP3)</span>
                             </button>
-                            <button id="mt-btn-analyze-again" class="cyber-btn-secondary">
-                                <i class="fa-solid fa-brain"></i> <span>重新 AI 拆解</span>
+                            <button id="mt-btn-copy-stream" class="galaxy-action-btn ghost-bordered">
+                                <i class="fa-regular fa-copy"></i> <span data-i18n="btn_copy_stream">复制下载直链</span>
                             </button>
+                        </div>
+
+                        <!-- ── Dual Feature Tabs: Transcript vs AI Video Insights ── -->
+                        <div class="mt-workbench-dual-tabs">
+                            <div class="mt-panel-tabs">
+                                <button type="button" class="mt-tab-btn active" data-mttab="transcript">
+                                    <i class="fa-solid fa-microphone-lines"></i>
+                                    <span data-i18n="tab_transcript">原声台词与逐句字幕提取</span>
+                                    <span class="tab-count-badge" id="mt-transcript-count">0句</span>
+                                </button>
+                                <button type="button" class="mt-tab-btn" data-mttab="ai">
+                                    <i class="fa-solid fa-brain"></i>
+                                    <span data-i18n="tab_ai_insights">AI 爆款看点与二创脚本拆解</span>
+                                    <span class="ai-model-tag">AI DEEP DIVE</span>
+                                </button>
+                            </div>
+
+                            <!-- Dual Tab 1: Spoken Audio Transcript Timeline -->
+                            <div id="mt-analysis-status" class="source-status" role="status" aria-live="polite">等待真实字幕或视频原声</div>
+                            <button id="mt-btn-retry-analysis" class="btn-back-topics hidden" type="button">重试字幕与内容分析</button>
+                            <div class="mt-tab-panel" id="mt-panel-transcript">
+                                <div class="transcript-toolbar">
+                                    <div class="toolbar-left">
+                                        <span class="transcript-status-dot"></span>
+                                        <span data-i18n="transcript_sync_hint">逐句音画对齐（点击时间戳可直接跳转视频播放）</span>
+                                    </div>
+                                    <div class="toolbar-actions">
+                                        <button type="button" id="mt-btn-copy-transcript" class="cyber-tool-btn" title="复制所有提取的台词">
+                                            <i class="fa-regular fa-copy"></i> <span>复制全文</span>
+                                        </button>
+                                        <button type="button" id="mt-btn-export-txt" class="cyber-tool-btn" title="导出为 TXT 纯文本">
+                                            <i class="fa-regular fa-file-lines"></i> <span>导出 TXT</span>
+                                        </button>
+                                        <button type="button" id="mt-btn-export-srt" class="cyber-tool-btn highlight" title="导出为标准 SRT 字幕文件">
+                                            <i class="fa-solid fa-file-code"></i> <span>导出 SRT</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="transcript-timeline-container" id="mt-transcript-timeline">
+                                    <div class="transcript-empty-state">
+                                        <i class="fa-solid fa-microphone-lines"></i>
+                                        <p>解析视频后将在此自动提取逐句原声台词与字幕时间轴</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Dual Tab 2: AI Video Insights & Storyboard Suggestion -->
+                            <div class="mt-tab-panel hidden" id="mt-panel-ai">
+                                <div class="ai-card-body">
+                                    <!-- Meta Attributes Pill Row -->
+                                    <div class="ai-section-box">
+                                        <div class="ai-meta-pills">
+                                            <span class="ai-category-badge" id="mt-ai-category">等待内容分析</span>
+                                            <span class="ai-audience-badge"><i class="fa-solid fa-users"></i> <span id="mt-ai-audience">尚未完成</span></span>
+                                        </div>
+                                        <div class="ai-trigger-text" id="mt-ai-trigger">
+                                            读取真实字幕或视频原声后，显示视频内容总结。
+                                        </div>
+                                    </div>
+
+                                    <!-- Golden Hooks -->
+                                    <div class="ai-section-box">
+                                        <div class="ai-section-title"><i class="fa-solid fa-magnet text-accent"></i> 内容重点与原句依据</div>
+                                        <div class="ai-hooks-cards" id="mt-ai-hooks">
+                                            <div class="hook-card">
+                                                <span class="hook-tag">等待真实内容</span>
+                                                <p class="hook-desc">分析完成后，可点击时间戳回看每个重点。</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Storyboard Suggestions -->
+                                    <div class="ai-section-box">
+                                        <div class="ai-section-title"><i class="fa-solid fa-clapperboard text-accent"></i> 分析依据与边界</div>
+                                        <div class="storyboard-grid" id="mt-ai-storyboard">
+                                            <div class="storyboard-item">
+                                                <p class="shot-action">依据字幕与语音分析，不推断未经识别的画面、镜头或音乐。</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Re-creation Strategy -->
+                                    <div class="ai-section-box">
+                                        <div class="ai-section-title"><i class="fa-solid fa-lightbulb text-accent"></i> 爆款复制与二创运营建议:</div>
+                                        <div class="ai-strategy-text" id="mt-ai-recommendations">
+                                            内容分析完成后显示学习建议；建议不等于视频原句。
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Right Column: Dual Tabs (Transcript & AI Deep Analysis) -->
-                    <div class="results-ai-card">
-                        <div class="mt-panel-tabs">
-                            <button class="mt-tab-btn active" data-mttab="transcript">
-                                <i class="fa-solid fa-file-lines"></i> <span>原声台词提取</span>
-                                <span class="tab-count-badge" id="mt-transcript-count">0句</span>
-                            </button>
-                            <button class="mt-tab-btn" data-mttab="ai">
-                                <i class="fa-solid fa-wand-magic-sparkles" style="color:#a855f7"></i> <span>AI 爆款深度拆解</span>
-                            </button>
-                        </div>
-
-                        <!-- Panel Tab 1: Transcript & Subtitles -->
-                        <div class="mt-tab-panel active" id="mt-panel-transcript">
-                            <div class="transcript-toolbar">
-                                <div class="toolbar-left">
-                                    <span class="transcript-status-dot"></span>
-                                    <span>AI 原声台词与字幕时间轴</span>
-                                </div>
-                                <div class="toolbar-actions">
-                                    <button id="mt-btn-copy-transcript" class="cyber-tool-btn" title="一键复制纯文本台词">
-                                        <i class="fa-regular fa-copy"></i> 复制全文
-                                    </button>
-                                    <button id="mt-btn-export-txt" class="cyber-tool-btn" title="导出 TXT 文本文档">
-                                        <i class="fa-solid fa-file-arrow-down"></i> 导出 TXT
-                                    </button>
-                                    <button id="mt-btn-export-srt" class="cyber-tool-btn highlight" title="导出标准 SRT 字幕文件">
-                                        <i class="fa-solid fa-closed-captioning"></i> 导出 SRT 字幕
-                                    </button>
-                                </div>
+                    <!-- Result Panel 2: Image Gallery Note (Xiaohongshu / Douyin Photos) -->
+                    <div class="galaxy-result-panel hidden" id="mt-panel-image">
+                        <div class="panel-header-row">
+                            <div class="panel-meta-left">
+                                <span class="galaxy-platform-tag tag-pink"><i class="fa-solid fa-images"></i> 图文笔记</span>
+                                <h3 id="mt-img-title" class="panel-title">图文笔记标题</h3>
                             </div>
-
-                            <div class="transcript-timeline-container" id="mt-transcript-timeline">
-                                <div class="transcript-empty-state">
-                                    <i class="fa-solid fa-microphone-lines"></i>
-                                    <p>解析完成后自动呈现逐句台词与时间戳</p>
-                                </div>
+                            <div class="panel-actions-right">
+                                <span class="images-count-pill">共 <strong id="mt-img-count">0</strong> 张高清原图</span>
                             </div>
                         </div>
 
-                        <!-- Panel Tab 2: AI Deep Insights & Storyboard -->
-                        <div class="mt-tab-panel hidden" id="mt-panel-ai">
-                            <div class="ai-card-body">
-                                <!-- AI Category & Audience Classification -->
-                                <div class="ai-section-box">
-                                    <div class="ai-section-title"><i class="fa-solid fa-tags"></i> 赛道定位与受众画像</div>
-                                    <div class="ai-meta-pills">
-                                        <span class="ai-category-badge" id="mt-ai-category">生活娱乐 & 综合创意</span>
-                                        <span class="ai-audience-badge" id="mt-ai-audience">全网短视频消费者</span>
-                                    </div>
-                                    <div class="ai-trigger-text" id="mt-ai-trigger">通过反差叙事与视觉冲击引发共鸣</div>
-                                </div>
+                        <!-- Batch Download Toolbar -->
+                        <div class="galaxy-image-toolbar">
+                            <button id="mt-btn-download-all-zip" class="galaxy-action-btn primary-gradient">
+                                <i class="fa-solid fa-file-zipper"></i> <span>一键批量打包下载所有原图 (ZIP)</span>
+                            </button>
+                            <button id="mt-btn-download-bgm" class="galaxy-action-btn secondary-gradient hidden">
+                                <i class="fa-solid fa-music"></i> <span>下载背景音乐 (BGM)</span>
+                            </button>
+                        </div>
 
-                                <!-- 3 Golden Hooks -->
-                                <div class="ai-section-box">
-                                    <div class="ai-section-title"><i class="fa-solid fa-bullseye"></i> 3大爆款核心黄金看点 (Golden Hooks)</div>
-                                    <div class="ai-hooks-cards" id="mt-ai-hooks">
-                                        <div class="hook-card">
-                                            <span class="hook-tag">⚡ 0~3秒 黄金钩子</span>
-                                            <p class="hook-desc">前3秒极速抛出核心悬念，瞬间锁定注意力</p>
-                                        </div>
-                                        <div class="hook-card">
-                                            <span class="hook-tag">🔥 4~15秒 情绪发酵</span>
-                                            <p class="hook-desc">高密度信息与矛盾痛点层层递进，提升完播留存</p>
-                                        </div>
-                                        <div class="hook-card">
-                                            <span class="hook-tag">💎 15~30秒 价值反转</span>
-                                            <p class="hook-desc">高潮反转与金句收尾，引导海量点赞与自发传播</p>
-                                        </div>
-                                    </div>
-                                </div>
+                        <!-- Image Masonry Grid -->
+                        <div class="galaxy-image-grid" id="mt-image-gallery"></div>
+                    </div>
 
-                                <!-- Storyboard Suggestions -->
-                                <div class="ai-section-box">
-                                    <div class="ai-section-title"><i class="fa-solid fa-clapperboard"></i> 分镜头拍摄与二创脚本建议</div>
-                                    <div class="storyboard-grid" id="mt-ai-storyboard">
-                                        <div class="storyboard-item">
-                                            <div class="shot-header"><span class="shot-badge">镜头 01</span> <strong>特写 / 动作定格</strong></div>
-                                            <p class="shot-action">开门见山展示最具视觉张力的动作或核心金句字幕</p>
-                                        </div>
-                                        <div class="storyboard-item">
-                                            <div class="shot-header"><span class="shot-badge">镜头 02</span> <strong>中景 / 主体叙事</strong></div>
-                                            <p class="shot-action">平滑推进叙事，节奏在2~3秒一切换避免疲劳</p>
-                                        </div>
-                                        <div class="storyboard-item">
-                                            <div class="shot-header"><span class="shot-badge">镜头 03</span> <strong>全景 / 情绪高潮</strong></div>
-                                            <p class="shot-action">定格在最具代表性的画面，抛出互动问题引导站队</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Remake & Viral Strategy -->
-                                <div class="ai-section-box">
-                                    <div class="ai-section-title"><i class="fa-solid fa-lightbulb"></i> 二创复刻与创作学习建议</div>
-                                    <div class="ai-strategy-text" id="mt-ai-recommendations">
-                                        建议学习其开头3秒钩子设计与音画卡点节奏，提取视频中的核心槽点作为二创脚本切入点。
-                                    </div>
-                                </div>
+                    <!-- Result Panel 3: Audio / Podcast -->
+                    <div class="galaxy-result-panel hidden" id="mt-panel-audio">
+                        <div class="panel-header-row">
+                            <div class="panel-meta-left">
+                                <span class="galaxy-platform-tag tag-green"><i class="fa-solid fa-headphones"></i> 纯音频流</span>
+                                <h3 id="mt-audio-title" class="panel-title">音频标题</h3>
                             </div>
+                        </div>
+                        <div class="galaxy-audio-player-box">
+                            <audio id="mt-native-audio" controls class="galaxy-audio-player"></audio>
+                        </div>
+                        <div class="galaxy-action-buttons">
+                            <button id="mt-btn-download-audio-file" class="galaxy-action-btn primary-gradient">
+                                <i class="fa-solid fa-cloud-arrow-down"></i> <span>一键下载音频 (MP3)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lower Section: Download History & Stats -->
+                <div class="galaxy-lower-grid">
+                    <!-- Left: Download History Card -->
+                    <div class="galaxy-history-card">
+                        <div class="history-header">
+                            <div class="history-title">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>本地下载历史 (<span id="mt-history-count">0</span>)</span>
+                            </div>
+                            <button id="mt-btn-clear-history" class="btn-clear-history" title="清空所有历史记录">
+                                <i class="fa-regular fa-trash-can"></i> 清空历史
+                            </button>
+                        </div>
+
+                        <div class="history-list-container" id="mt-history-list">
+                            <div class="history-empty">
+                                <i class="fa-regular fa-folder-open"></i>
+                                <p>暂无下载历史记录，解析后的媒体将自动保存于此</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Today Stats & Guides -->
+                    <div class="galaxy-stats-card">
+                        <div class="stats-header">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>今日全网解析统计</span>
+                        </div>
+                        <div class="stats-number-box">
+                            <span class="stats-large-num" id="mt-today-total-count">0</span>
+                            <span class="stats-label">次 极速穿透解析</span>
+                        </div>
+                        <div class="stats-pills-row" id="mt-today-platforms">
+                            <div class="stat-pill"><span class="pill-dot dy"></span> 抖音 <strong>0</strong></div>
+                            <div class="stat-pill"><span class="pill-dot bili"></span> B站 <strong>0</strong></div>
+                            <div class="stat-pill"><span class="pill-dot xhs"></span> 小红书 <strong>0</strong></div>
+                            <div class="stat-pill"><span class="pill-dot ks"></span> 快手 <strong>0</strong></div>
+                        </div>
+                        <div class="stats-feature-list">
+                            <div class="feat-item"><i class="fa-solid fa-circle-check"></i> 本地处理真实音视频轨 · 保留原声</div>
+                            <div class="feat-item"><i class="fa-solid fa-circle-check"></i> 清晰度与可访问性以平台实际返回为准</div>
+                            <div class="feat-item"><i class="fa-solid fa-circle-check"></i> 真实字幕 / 语音识别 · TXT 与 SRT 导出</div>
                         </div>
                     </div>
                 </div>
@@ -658,45 +787,202 @@
         </div>
     </aside>
 
-    <!-- ── Settings Modal (Proxy Config) ───────────────────── -->
+    <!-- ── Settings Modal (Language, Proxy & Preferences) ───────────────────── -->
     <div id="settings-modal" class="modal-overlay hidden">
-        <div class="modal-card">
+        <div class="modal-card settings-modal-card">
             <div class="modal-header">
                 <div class="modal-title-with-icon">
-                    <i class="fa-solid fa-network-wired modal-header-icon"></i>
+                    <i class="fa-solid fa-gear modal-header-icon"></i>
                     <div>
-                        <h2>代理与网络抓取配置</h2>
-                        <small>配置抓取 YouTube, TikTok, Twitter 等海外平台的本地网络代理</small>
+                        <h2 data-i18n="settings_title">系统偏好与设置</h2>
+                        <small data-i18n="settings_sub">配置多语言环境、海外平台网络代理与操作偏好</small>
                     </div>
                 </div>
                 <button id="close-modal-btn" class="close-modal-btn-x">&times;</button>
             </div>
+
+            <!-- Settings Tabs Navigation -->
+            <div class="settings-nav-tabs">
+                <button type="button" class="settings-tab-btn active" data-settab="language">
+                    <i class="fa-solid fa-language"></i> <span data-i18n="set_tab_lang">语言偏好 (Language)</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-settab="proxy">
+                    <i class="fa-solid fa-network-wired"></i> <span data-i18n="set_tab_proxy">网络与代理 (Proxy)</span>
+                </button>
+            </div>
+
             <div class="modal-body">
-                <div class="form-group-cyber">
-                    <label for="setting-proxy"><i class="fa-solid fa-server"></i> 本地代理服务器地址 (Proxy URL)</label>
-                    <input type="text" id="setting-proxy" placeholder="例如: http://127.0.0.1:7897">
-                    <div class="proxy-quick-pills">
-                        <span>常用端口快捷填充:</span>
-                        <button type="button" class="proxy-pill-btn" data-url="http://127.0.0.1:7897">Clash Verge (7897)</button>
-                        <button type="button" class="proxy-pill-btn" data-url="http://127.0.0.1:7890">Clash (7890)</button>
-                        <button type="button" class="proxy-pill-btn" data-url="http://127.0.0.1:10809">v2rayN (10809)</button>
-                        <button type="button" class="proxy-pill-btn" data-url="">禁用代理</button>
+                <!-- Tab 1: Global Language Settings -->
+                <div class="settings-tab-content" id="set-content-language">
+                    <div class="form-group-cyber">
+                        <label><i class="fa-solid fa-globe"></i> <span data-i18n="label_select_lang">选择系统全局显示语言 (Select System Language):</span></label>
+                        <div class="language-options-grid">
+                            <label class="lang-card active" data-lang="zh-CN">
+                                <input type="radio" name="system-language" value="zh-CN" checked>
+                                <span class="lang-flag">🇨🇳</span>
+                                <div class="lang-text">
+                                    <strong>简体中文</strong>
+                                    <small>Simplified Chinese (Default)</small>
+                                </div>
+                                <i class="fa-solid fa-circle-check lang-check"></i>
+                            </label>
+
+                            <label class="lang-card" data-lang="zh-TW">
+                                <input type="radio" name="system-language" value="zh-TW">
+                                <span class="lang-flag">🇭🇰</span>
+                                <div class="lang-text">
+                                    <strong>繁體中文</strong>
+                                    <small>Traditional Chinese</small>
+                                </div>
+                                <i class="fa-solid fa-circle-check lang-check"></i>
+                            </label>
+
+                            <label class="lang-card" data-lang="en">
+                                <input type="radio" name="system-language" value="en">
+                                <span class="lang-flag">🇺🇸</span>
+                                <div class="lang-text">
+                                    <strong>English</strong>
+                                    <small>International English</small>
+                                </div>
+                                <i class="fa-solid fa-circle-check lang-check"></i>
+                            </label>
+
+                            <label class="lang-card" data-lang="ja">
+                                <input type="radio" name="system-language" value="ja">
+                                <span class="lang-flag">🇯🇵</span>
+                                <div class="lang-text">
+                                    <strong>日本語</strong>
+                                    <small>Japanese</small>
+                                </div>
+                                <i class="fa-solid fa-circle-check lang-check"></i>
+                            </label>
+
+                            <label class="lang-card" data-lang="ko">
+                                <input type="radio" name="system-language" value="ko">
+                                <span class="lang-flag">🇰🇷</span>
+                                <div class="lang-text">
+                                    <strong>한국어</strong>
+                                    <small>Korean</small>
+                                </div>
+                                <i class="fa-solid fa-circle-check lang-check"></i>
+                            </label>
+                        </div>
                     </div>
                 </div>
-                <div class="proxy-status-card">
-                    <div class="status-left">
-                        <span class="status-title">当前代理连接状态</span>
-                        <span id="proxy-status" class="proxy-status-badge inactive">未连接</span>
+
+                <!-- Tab 2: Proxy Configuration -->
+                <div class="settings-tab-content hidden" id="set-content-proxy">
+                    <p class="source-status">全局代理会影响所有账号，仅真实管理员可修改；语言偏好在本机保存。配置成功不代表所有海外平台可访问。</p>
+                    <div class="form-group-cyber">
+                        <label for="setting-proxy"><i class="fa-solid fa-server"></i> 本地代理服务器地址 (Proxy URL)</label>
+                        <input type="text" id="setting-proxy" placeholder="例如: http://127.0.0.1:7897">
+                        <div class="proxy-quick-pills">
+                            <span>常用端口快捷填充:</span>
+                            <button type="button" class="proxy-pill-btn" data-url="http://127.0.0.1:7897">Clash Verge (7897)</button>
+                            <button type="button" class="proxy-pill-btn" data-url="http://127.0.0.1:7890">Clash (7890)</button>
+                            <button type="button" class="proxy-pill-btn" data-url="http://127.0.0.1:10809">v2rayN (10809)</button>
+                            <button type="button" class="proxy-pill-btn" data-url="">禁用代理</button>
+                        </div>
+                    </div>
+                    <div class="proxy-status-card">
+                        <div class="status-left">
+                            <span class="status-title">当前代理连接状态</span>
+                            <span id="proxy-status" class="proxy-status-badge inactive">未连接</span>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button id="btn-save-settings" class="cyber-btn-submit">
-                    <i class="fa-solid fa-floppy-disk"></i> 保存并应用代理
+                    <i class="fa-solid fa-floppy-disk"></i> <span data-i18n="btn_save_settings">保存并应用设置</span>
                 </button>
             </div>
         </div>
     </div>
+
+    <!-- ── User Profile Information Modal ────────────────────────────── -->
+    <div id="profile-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-with-icon">
+                    <i class="fa-regular fa-id-badge modal-header-icon"></i>
+                    <div>
+                        <h2>个人基本信息</h2>
+                        <small>查看与管理当前登录账户的基本身份资料</small>
+                    </div>
+                </div>
+                <button id="close-profile-modal-btn" class="close-modal-btn-x">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-card-inner">
+                    <div class="profile-avatar-row">
+                        <img id="profile-user-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=user" alt="Avatar" class="profile-avatar-large">
+                        <div class="profile-meta-info">
+                            <div class="profile-name-row">
+                                <h3 id="profile-nickname">体验用户</h3>
+                                <span id="profile-role-badge" class="role-badge role-user">USER</span>
+                            </div>
+                            <p class="profile-uid-text">UID: <span id="profile-username">demo_user</span></p>
+                            <span class="profile-reg-time"><i class="fa-regular fa-calendar-check"></i> 注册时间: <span id="profile-reg-date">未记录</span></span>
+                        </div>
+                    </div>
+
+                    <div class="profile-quota-box">
+                        <div class="quota-meta-header">
+                            <span><i class="fa-solid fa-bolt"></i> 今日真实处理额度</span>
+                            <strong id="profile-quota-display">正在读取</strong>
+                        </div>
+                        <div class="quota-bar-track">
+                            <div class="quota-bar-fill" id="profile-quota-bar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-profile-to-benefits" class="cyber-btn-submit">
+                    <i class="fa-solid fa-crown"></i> 查看实际额度与能力
+                </button>
+                <button id="btn-account-edit" class="cyber-btn-secondary">修改昵称 / 密码</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="system-status-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header"><h2>实际连接与功能状态</h2><button id="close-system-status" class="close-modal-btn-x">&times;</button></div>
+            <div class="modal-body" id="system-status-body">正在读取</div>
+        </div>
+    </div>
+    <div id="account-edit-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header"><h2>管理真实账号</h2><button id="close-account-edit" class="close-modal-btn-x">&times;</button></div>
+            <div class="modal-body">
+                <form id="profile-edit-form" class="auth-form">
+                    <label for="profile-edit-nickname">显示昵称</label><input id="profile-edit-nickname" class="form-input" maxlength="64" required>
+                    <button class="cyber-btn-submit" type="submit">保存昵称</button>
+                </form>
+                <form id="account-password-form" class="auth-form">
+                    <label for="account-current-password">当前密码</label><input id="account-current-password" type="password" autocomplete="current-password" required>
+                    <label for="account-new-password">新密码（12至128个字符）</label><input id="account-new-password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+                    <button class="cyber-btn-submit" type="submit">修改密码并注销旧会话</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 真实账号额度与处理能力 -->
+    <div id="benefits-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header"><h2>账号额度与实际能力</h2><button id="close-benefits-modal-btn" class="close-modal-btn-x">&times;</button></div>
+            <div class="modal-body">
+                <p>普通账号每日20次媒体处理，上海时区重置。解析与新建分析/下载任务分别占用一次；处理中预占，失败退回，同账号重复任务不重复扣减。</p>
+                <p>所有账号使用同一真实媒体与语音处理链路。清晰度、无水印地址和可访问性取决于平台实际返回，不保证4K、无限并发或所有平台可访问。</p>
+                <p>处理队列当前为1个运行任务、最多8个等待任务。AI依据字幕/原声，不做镜头或画面识别。未启用支付或会员购买。</p>
+                <p>管理员权限只能由本机维护命令创建，不能从网页自行升级。</p>
+            </div>
+        </div>
+    </div>
+
 
     <!-- ── Popup Video Player Modal with Full Danmaku Engine ─────────── -->
     <div id="player-modal" class="modal-overlay hidden">
@@ -730,7 +1016,7 @@
                         <i class="fa-solid fa-comment-dots"></i>
                         <span>弹幕 开</span>
                     </button>
-                    
+
                     <div class="danmaku-input-container">
                         <i class="fa-regular fa-paper-plane danmaku-input-icon"></i>
                         <input type="text" id="modal-danmaku-input" placeholder="发一条弹幕见证这个神作..." maxlength="60">
@@ -776,47 +1062,14 @@
                     <i class="fa-solid fa-shield-halved modal-header-icon"></i>
                     <div>
                         <h2>用户中心与身份权限认证</h2>
-                        <small>切换内置系统角色或使用独立账号登入</small>
+                        <small>真实注册、登录与服务端会话认证</small>
                     </div>
                 </div>
                 <button id="close-auth-modal-btn" class="close-modal-btn-x">&times;</button>
             </div>
 
             <div class="modal-body auth-modal-body">
-                <!-- 1-Click Preset Roles Selector -->
-                <div class="preset-roles-section">
-                    <span class="section-badge-label"><i class="fa-solid fa-users-gear"></i> 一键切换内置权限角色：</span>
-                    <div class="role-cards-grid">
-                        <div class="role-card" id="btn-role-admin" title="拥有系统最高管理特权与日志审计">
-                            <div class="role-card-header">
-                                <i class="fa-solid fa-crown role-icon admin-icon"></i>
-                                <span class="role-tag role-admin">ADMIN</span>
-                            </div>
-                            <h4>超级管理员</h4>
-                            <p>mediaAdmin · 无限下载配额</p>
-                        </div>
-
-                        <div class="role-card" id="btn-role-pro" title="拥有VIP极速下载与AI拆解特权">
-                            <div class="role-card-header">
-                                <i class="fa-solid fa-bolt-lightning role-icon pro-icon"></i>
-                                <span class="role-tag role-pro">PRO会员</span>
-                            </div>
-                            <h4>PRO尊贵会员</h4>
-                            <p>mediaPro · 极速AI无限畅享</p>
-                        </div>
-
-                        <div class="role-card" id="btn-role-demo" title="标准演示账户">
-                            <div class="role-card-header">
-                                <i class="fa-solid fa-user-astronaut role-icon user-icon"></i>
-                                <span class="role-tag role-user">体验用户</span>
-                            </div>
-                            <h4>普通体验用户</h4>
-                            <p>demo · 每日5次免费提取</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="auth-divider"><span>或通过自定义账号登录</span></div>
+                <p class="source-status">使用独立账号；角色与额度由服务端决定，不能一键切换管理员。旧演示账号已停用。</p>
 
                 <div class="auth-tabs">
                     <button class="auth-tab active" data-tab="login"><i class="fa-solid fa-right-to-bracket"></i> 账号登录</button>
@@ -851,7 +1104,7 @@
                     </div>
                     <div class="form-group-cyber">
                         <label><i class="fa-solid fa-lock"></i> 设置密码</label>
-                        <input type="password" id="reg-password" placeholder="设置登录密码" required>
+                        <input type="password" id="reg-password" placeholder="12至128个字符，不自动去除空格" minlength="12" maxlength="128" autocomplete="new-password" required>
                     </div>
                     <div class="auth-message-box hidden" id="reg-msg-box"></div>
                     <button type="submit" class="cyber-btn-submit">
@@ -862,9 +1115,24 @@
         </div>
     </div>
 
+    <!-- Image Lightbox Modal for Photo Gallery -->
+    <div id="mt-lightbox-modal" class="galaxy-lightbox-modal hidden">
+        <button id="mt-lightbox-close" class="lightbox-close-btn" title="关闭大图预览"><i class="fa-solid fa-xmark"></i></button>
+        <div class="lightbox-content">
+            <img id="mt-lightbox-img" src="" alt="大图预览" class="lightbox-image">
+            <div class="lightbox-footer">
+                <span id="mt-lightbox-title" class="lightbox-title"></span>
+                <a id="mt-lightbox-download" class="galaxy-action-btn primary-gradient" download target="_blank">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> <span>下载此高清原图</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <script src="/vendor/jszip.min.js"></script>
     <script src="/vendor/globe.gl.min.js"></script>
     <script src="app.js"></script>
 </body>
