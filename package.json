@@ -6,15 +6,21 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/video-pipeline.test.js && node test/geo-hotspots.test.js && node test/transcript-content.test.js && node test/platform-rankings.test.js && node test/media-identity.test.js && node test/downloader-integration.test.js && node test/accounts.test.js && node test/api-smoke.test.js",
+    "test": "node test/video-pipeline.test.js && node test/geo-hotspots.test.js && node test/transcript-content.test.js && node test/platform-rankings.test.js && node test/public-discovery.test.js && node test/source-session.test.js && node test/media-identity.test.js && node test/tiktok-embed.test.js && node test/downloader-integration.test.js && node test/accounts.test.js && node test/guest-access.test.js && node test/api-smoke.test.js",
     "test:live": "node test/live-media.test.js",
+    "test:guest-media": "node test/guest-media.test.js",
+    "test:guest-ui": "node test/guest-ui.test.js",
+    "test:anonymous-media": "node test/anonymous-media-check.test.js",
     "test:rankings": "node test/live-rankings.test.js",
     "test:rankings-ui": "node test/rankings-ui.test.js",
     "test:ui": "node test/browser-ui.test.js",
     "test:accounts-ui": "node test/accounts-ui.test.js",
+    "test:experience": "node test/platform-experience.test.js",
+    "test:discovery": "node test/live-discovery.test.js",
     "test:system": "node test/system-audit.test.js",
     "setup:media": "powershell -ExecutionPolicy Bypass -File scripts/setup-media.ps1",
-    "account:create-admin": "node scripts/create-admin.js"
+    "account:create-admin": "node scripts/create-admin.js",
+    "platform:login": "node scripts/platform-login.js"
   },
   "keywords": [
     "heathub",

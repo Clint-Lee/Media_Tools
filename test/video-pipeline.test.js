@@ -24,6 +24,14 @@ assert.equal(unknown.playCount, '未公开');
 assert.equal(unknown.pubdate, 0, '未知日期不能伪造为今天');
 const likes = prepareVideoList([{ id: 'd', title: '作品', platform: 'douyin', metric: 'likes', metricRaw: 123, metricLabel: '点赞', playRaw: null }], { now })[0];
 assert.equal(likes.playRaw, null);
-assert.equal(likes.metricRaw, 123, '点赞不能当播放量');
+assert.equal(likes.metricRaw, null, '点赞不能当播放量或播放排序依据');
+assert.equal(likes.likeRaw, 123);
+assert.equal(likes.metricLabel, '播放');
+assert.deepEqual(prepareVideoList([
+    {id:'unknown',title:'百万点赞但播放未公开',platform:'douyin',metric:'likes',metricRaw:1000000},
+    {id:'zero',title:'真实零播放',platform:'youtube',playRaw:0},
+    {id:'known',title:'实际播放',platform:'douyin',playRaw:300,likeRaw:2},
+    {id:'topic-card',title:'热搜卡片不是视频',platform:'douyin',metric:'heat',metricRaw:99999999}
+]).map(v=>v.id), ['known','zero','unknown']);
 assert.equal(prepareVideoList([{title:'无ID'}]).length, 0);
 console.log('video-pipeline tests passed');

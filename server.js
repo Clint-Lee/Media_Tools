@@ -9,6 +9,12 @@ const { attachVideoLocations } = require('./lib/geo-hotspots');
 const liveSources = require('./lib/live-sources');
 const mediaJobs = require('./lib/media-jobs');
 const safeNetwork = require('./lib/safe-network');
+const accounts = require('./lib/accounts');
+const guests = require('./lib/guest-access');
+const authenticate = accounts.auth;
+const mediaAccess = guests.access(accounts.optionalUser);
+function mediaStore(owner) { return owner.startsWith('guest:') ? guests : accounts.store; }
+function logTransfer(owner,event) { try {mediaStore(owner).log(owner,event);}catch {console.warn('[Media History] 文件传输记录写入失败，未假报已保存');} }
 const {
     unifiedParse,
     resolveAntiHotlinkingHeaders,
@@ -56,12 +62,14 @@ app.get('/vendor/night-sky.png', (req, res) => {
     if (fs.existsSync(local)) return res.sendFile(local);
     res.sendFile(path.join(threeGlobeAssetsDir, 'night-sky.png'));
 });
+// HTML先建立匿名会话，避免多个首屏请求同时各自生成访客标识；不要求注册或扫码。
+app.use((req,res,next)=>['/','/index.html'].includes(req.path)?mediaAccess(req,res,next):next());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const accounts = require('./lib/accounts');
-const authenticate = accounts.auth;
 app.use('/api', accounts.sameOrigin);
 accounts.mount(app);
+app.get('/api/media/history',mediaAccess,(req,res)=>res.json({success:true,visitor:Boolean(req.user.guest),quota:req.user.quota,list:mediaStore(req.user.username).history(req.user.username)}));
+app.delete('/api/media/history/:id?',mediaAccess,(req,res)=>{mediaStore(req.user.username).clearHistory(req.user.username,req.params.id);res.json({success:true});});
 
 // ── Universal Media Parser API (GET & POST) ──────────────────────────────────
 async function handleUnifiedParse(req, res) {
@@ -72,13 +80,13 @@ async function handleUnifiedParse(req, res) {
 
     let reservation;
     try {
-        safeNetwork.platformUrl(extractUrlFromText(rawUrl) || rawUrl);
-        reservation = accounts.store.reserve(req.user.username, 'parse');
-        console.log(`[Downloader API] Parsing media link: ${String(rawUrl).substring(0, 80)}...`);
+        const pageUrl=safeNetwork.platformUrl(extractUrlFromText(rawUrl) || rawUrl);
+        reservation = mediaStore(req.user.username).reserve(req.user.username, 'parse');
+        console.log('[Downloader API] Parsing public media from '+pageUrl.hostname);
         const result = await unifiedParse(rawUrl);
 
         if (!result || !result.success) {
-            accounts.store.settle(reservation, false);
+            mediaStore(req.user.username).settle(reservation, false);
             return res.status(400).json(result || { success: false, error: '解析失败，请检查链接有效性' });
         }
 
@@ -88,8 +96,8 @@ async function handleUnifiedParse(req, res) {
         result.data.analysisStatus = result.data.noteType === 'image' ? 'unsupported' : 'pending';
         const { httpHeaders, ...publicData } = result.data;
 
-        accounts.store.settle(reservation, true);
-        accounts.store.log(req.user.username, { kind: 'parse', status: 'parsed', url: result.data.url || rawUrl, title: result.data.title, cover: result.data.cover, platform: result.data.platform });
+        mediaStore(req.user.username).settle(reservation, true);
+        mediaStore(req.user.username).log(req.user.username, { kind: 'parse', status: 'parsed', url: result.data.url || rawUrl, title: result.data.title, cover: result.data.cover, platform: result.data.platform });
 
         return res.json({
             success: true,
@@ -110,18 +118,20 @@ async function handleUnifiedParse(req, res) {
             aiAnalysis: result.data.aiAnalysis
         });
     } catch (e) {
-        if (reservation) accounts.store.settle(reservation, false);
+        if (reservation) try {mediaStore(req.user.username).settle(reservation, false);}catch {console.warn('[Media] 失败任务额度回收未能写入');}
         console.error('[Downloader API] Parse exception:', e.message);
         return res.status(e.status || 502).json({ success: false, error: '真实媒体解析失败: ' + e.message });
     }
 }
 
-app.get('/api/parse', authenticate, handleUnifiedParse);
-app.post('/api/parse', authenticate, handleUnifiedParse);
+app.get('/api/parse', mediaAccess, handleUnifiedParse);
+app.post('/api/parse', mediaAccess, handleUnifiedParse);
 
 // ── Today Parse Statistics API ───────────────────────────────────────────────
 app.get('/api/stats/today', (req, res) => {
-    return res.json(accounts.store.statistics());
+    const saved=accounts.store.statistics(),visitor=guests.statistics(),platforms={...saved.platforms};
+    for(const [key,count]of Object.entries(visitor.platforms))platforms[key]=(platforms[key] || 0)+count;
+    return res.json({...saved,totalCount:saved.totalCount+visitor.totalCount,platforms,basis:'成功解析记录：账号统计持久化，访客统计为本进程内存（重启重置）'});
 });
 
 app.get('/api/media/capabilities', (req, res) => res.json({ success: true, ...mediaJobs.capabilities() }));
@@ -135,30 +145,30 @@ function handleMediaJob(req, res) {
         safeNetwork.platformUrl(url);
         const reused = mediaJobs.findReusable({ url, kind:req.body.kind || 'analyze', owner:req.user.username });
         if (reused) return res.status(202).json({ success:true, job:{...mediaJobs.getJob(reused.id,req.user.username),reused:true} });
-        reservation = accounts.store.reserve(req.user.username, req.body.kind || 'analyze');
+        reservation = mediaStore(req.user.username).reserve(req.user.username, req.body.kind || 'analyze');
         const job = mediaJobs.createJob({ url, mediaId: req.body.mediaId, kind: req.body.kind || 'analyze', owner: req.user.username,
             onFinished: current => {
-                accounts.store.settle(reservation, current.status === 'complete');
-                accounts.store.log(current.owner, { kind: current.kind, status: current.status === 'complete' ? 'prepared' : 'failed',
+                mediaStore(current.owner).settle(reservation, current.status === 'complete');
+                mediaStore(current.owner).log(current.owner, { kind: current.kind, status: current.status === 'complete' ? 'prepared' : 'failed',
                     url: current.url, title: current.title, jobId: current.id, message: current.message });
             } });
-        if (job.reused) accounts.store.settle(reservation, false);
+        if (job.reused) mediaStore(req.user.username).settle(reservation, false);
         return res.status(202).json({ success: true, job });
     } catch (error) {
-        if (reservation) accounts.store.settle(reservation, false);
+        if (reservation) try {mediaStore(req.user.username).settle(reservation, false);}catch {console.warn('[Media] 失败任务额度回收未能写入');}
         return res.status(error.status || (/队列已满/.test(error.message) ? 429 : 400)).json({ success: false, message: error.message });
     }
 }
-app.post('/api/media/jobs', authenticate, handleMediaJob);
-app.get('/api/media/jobs/:id', authenticate, (req, res) => {
+app.post('/api/media/jobs', mediaAccess, handleMediaJob);
+app.get('/api/media/jobs/:id', mediaAccess, (req, res) => {
     const job = mediaJobs.getJob(req.params.id, req.user.username);
     return job ? res.json({ success: true, job }) : res.status(404).json({ success: false, message: '任务不存在或已过期' });
 });
-app.get('/api/media/jobs/:id/file', authenticate, (req, res) => {
+app.get('/api/media/jobs/:id/file', mediaAccess, (req, res) => {
     const file = mediaJobs.getJobFile(req.params.id, req.user.username);
     if (!file) return res.status(404).json({ success: false, message: '媒体文件尚未生成' });
     res.setHeader('Cache-Control', 'private, no-store');
-    res.on('finish', () => { if (res.statusCode < 400) accounts.store.log(req.user.username, { kind: file.kind, status: req.headers.range ? 'streamed' : 'sent', url: file.url, title: file.title, jobId: req.params.id }); });
+    res.on('finish', () => { if (res.statusCode < 400 && req.method!=='HEAD') logTransfer(req.user.username, { kind: file.kind, status: req.headers.range ? 'streamed' : 'sent', url: file.url, title: file.title, jobId: req.params.id }); });
     return res.download(file.path, file.filename);
 });
 
@@ -188,7 +198,7 @@ function resolveMediaExtension(contentType, safeFilename) {
 }
 
 // ── Anti-Hotlinking Streaming Download Pipeline ──────────────────────────────
-app.get('/api/download', authenticate, async (req, res) => {
+app.get('/api/download', mediaAccess, async (req, res) => {
     let targetUrl = req.query.url || req.query.videoUrl;
     const filename = req.query.filename || req.query.title || `Media_${Date.now()}`;
     const customReferer = req.query.referer;
@@ -257,9 +267,9 @@ app.get('/api/download', authenticate, async (req, res) => {
         res.on('finish', () => {
             const isTruncated = expectedBytes && bytesReceived < expectedBytes;
             if (res.statusCode < 400 && !streamFailed && !isTruncated) {
-                accounts.store.log(req.user.username, { kind: 'direct-download', status: 'sent', url: '', title: safeFilename });
+                logTransfer(req.user.username, { kind: 'direct-download', status: 'sent', url: '', title: safeFilename });
             } else if (streamFailed || isTruncated) {
-                accounts.store.log(req.user.username, { kind: 'direct-download', status: 'interrupted', url: '', title: safeFilename, message: '上游传输中断或未完成' });
+                logTransfer(req.user.username, { kind: 'direct-download', status: 'interrupted', url: '', title: safeFilename, message: '上游传输中断或未完成' });
             }
         });
 
@@ -362,7 +372,7 @@ function cacheVideoApi(req, res, next) {
 
     const sendJson = res.json.bind(res);
     res.json = payload => {
-        if (res.statusCode < 400 && payload?.success && Array.isArray(payload.list)) {
+        if (res.statusCode < 400 && payload?.success && Array.isArray(payload.list) && !payload.stale && !payload.refreshing) {
             const ttl = payload.partial || payload.stale ? 60000 : req.path === '/api/trends' ? 120000 : 60000;
             videoApiCache.set(cacheKey, { payload, expiresAt: Date.now() + ttl });
             if (videoApiCache.size > 200) {
@@ -484,7 +494,8 @@ function sendVideoList(res, list, timeRange, extra = {}) {
         list: prepared,
         total: prepared.length,
         timeRange: timeRange || 'all',
-        sortedBy: 'heat_desc',
+        sortedBy: 'views_desc_unknown_last',
+        ranking: { ranked:prepared.filter(v=>v.playRaw!==null).length, unranked:prepared.filter(v=>v.playRaw===null).length, metric:'views' },
         geoCoverage: {
             located: locatedCount,
             total: prepared.length,
@@ -640,7 +651,7 @@ async function handleLiveVideos(req, res) {
         const result = await liveSources.getVideos(options, fetchYouTubeLive);
         return sendVideoList(res, result.list, options.timeRange, {
             source: result.source, sourceMessage: result.message, partial: result.partial || false,
-            hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false,
+            hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false, refreshing:result.refreshing || false,
             fetchedAt: result.list[0]?.fetchedAt || Date.now()
         });
     } catch (error) {
@@ -677,16 +688,20 @@ app.get('/api/geo-hotspots', async (req, res) => {
     try { options = liveOptions(req); }
     catch (error) { return res.status(400).json({ success: false, message: error.message }); }
     try {
-        const result = await liveSources.getVideos(options, fetchYouTubeLive);
+        const scope=req.query.scope==='available'?'available':'current';
+        const result = scope==='available' ? await liveSources.collectedGeoVideos({...options,scope}, fetchYouTubeLive)
+            : {...await liveSources.getVideos(options,fetchYouTubeLive),platforms:[options.platform]};
         const list = liveSources.aggregateGeo(result.list);
         return res.json({ success: true, list, hotspots: list, cityCount: list.length,
+            scope, platforms:result.platforms, cityCatalog:require('./lib/geo-hotspots').CITY_CATALOG.map(({city,country,lat,lng})=>({city,country,lat,lng})),
             totalSignals: list.reduce((n, city) => n + city.count, 0), sampleSize: result.list.length,
-            method: '当前视频样本中的城市关联（内容识别，不代表作者 IP 属地）', generatedAt: Date.now() });
+            collectedAt:result.list.length?Math.min(...result.list.map(v=>v.fetchedAt || Date.now())):null,
+            method: (scope==='available'?'已采集平台汇总':'当前平台')+'视频样本中的城市关联（内容识别，不代表作者 IP 属地）', generatedAt: Date.now() });
     } catch (error) { return res.status(502).json({ success: false, list: [], message: error.message }); }
 });
 
 // Stream proxy to bypass Referer / CORS restrictions (e.g. Bilibili/Douyin CDNs)
-app.get('/api/proxy-video', (req,res,next)=>req.query.download==='1'?authenticate(req,res,next):next(), async (req, res) => {
+app.get('/api/proxy-video', (req,res,next)=>req.query.download==='1'?mediaAccess(req,res,next):next(), async (req, res) => {
     const { referer, download } = req.query;
     let { url } = req.query;
     if (!url) return res.status(400).send('No URL provided');
@@ -756,7 +771,7 @@ app.get('/api/proxy-video', (req,res,next)=>req.query.download==='1'?authenticat
 
 
 // Image proxy — bypass hotlink protection for Bilibili, Douyin, and other CDNs
-app.get('/api/proxy-image', (req, res, next) => req.query.download === '1' ? authenticate(req, res, next) : next(), async (req, res) => {
+app.get('/api/proxy-image', (req, res, next) => req.query.download === '1' ? mediaAccess(req, res, next) : next(), async (req, res) => {
     let { url } = req.query;
     if (!url) return res.status(400).send('No URL provided');
     try {
@@ -774,6 +789,8 @@ app.get('/api/proxy-image', (req, res, next) => req.query.download === '1' ? aut
             referer = 'https://www.xiaohongshu.com/';
         } else if (urlLower.includes('kuaishou') || urlLower.includes('yximgs') || urlLower.includes('kwaicdn')) {
             referer = 'https://www.kuaishou.com/';
+        } else if (urlLower.includes('tiktok') || urlLower.includes('ibytedtos')) {
+            referer = 'https://www.tiktok.com/';
         } else if (urlLower.includes('youtube') || urlLower.includes('ytimg')) {
             referer = 'https://www.youtube.com/';
         }
@@ -794,7 +811,7 @@ app.get('/api/proxy-image', (req, res, next) => req.query.download === '1' ? aut
         res.setHeader('Cache-Control', 'public, max-age=300');
         if (req.query.download === '1') {
             res.setHeader('Cache-Control', 'private, no-store');
-            res.on('finish', () => accounts.store.log(req.user.username, { kind:'image', status:'sent', title:'实际原图 .' + format.ext, url:'' }));
+            res.on('finish', () => logTransfer(req.user.username, { kind:'image', status:'sent', title:'实际原图 .' + format.ext, url:'' }));
         }
         res.send(image);
     } catch (err) {
@@ -884,8 +901,8 @@ app.get('/api/danmaku', async (req, res) => {
 });
 
 // Title-only requests cannot produce a transcript or video-content analysis.
-app.post('/api/analyze', authenticate, handleMediaJob);
-app.post('/api/transcript', authenticate, (req, res) => { req.body ||= {}; req.body.kind = 'transcript'; return handleMediaJob(req, res); });
+app.post('/api/analyze', mediaAccess, handleMediaJob);
+app.post('/api/transcript', mediaAccess, (req, res) => { req.body ||= {}; req.body.kind = 'transcript'; return handleMediaJob(req, res); });
 
 
 
@@ -893,6 +910,11 @@ if (require.main === module) {
     let server;
     detectProxy().then(()=>{ server = app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
         console.log(`[万热观象 | Heat Hub] Server is running at http://localhost:${PORT}`);
+        if(process.env.HOTPOT_PREWARM!=='0')liveSources.boundedMap(['tiktok','kuaishou','xiaohongshu','twitter','douyin'],2,async platform=>{
+            await liveSources.getVideos({platform,category:'all',timeRange:'all',query:'',page:1},fetchYouTubeLive)
+                .then(result=>console.log('[Public Feed] '+platform+' anonymous candidates: '+result.list.length))
+                .catch(()=>console.warn('[Public Feed] '+platform+' 本次匿名预取不可用，不影响其它功能'));
+        });
     }); });
     async function stop() { mediaJobs.shutdown(); await liveSources.closeBrowser(); if(server)server.close(() => process.exit(0)); else process.exit(0); }
     process.once('SIGINT', stop);

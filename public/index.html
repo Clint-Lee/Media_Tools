@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="no-referrer">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='.9em' font-size='56'%3E🔥%3C/text%3E%3C/svg%3E">
     <title>万热观象 | Heat Hub - 全球多平台实时热点监测与全能媒体工作台</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -95,7 +92,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">小红书</span>
-                        <span class="nav-btn-sub">视频搜索 · 需登录态</span>
+                        <span class="nav-btn-sub">匿名访问 · 查看公开源状态</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -106,7 +103,7 @@
                     </div>
                     <div class="nav-btn-text">
                         <span class="nav-btn-name">快手热门</span>
-                        <span class="nav-btn-sub">视频搜索 · 需登录态</span>
+                        <span class="nav-btn-sub">匿名访问 · 查看公开源状态</span>
                     </div>
                     <span class="nav-btn-indicator"></span>
                 </button>
@@ -285,7 +282,7 @@
 
             <!-- 3D Globe Radar View -->
             <div id="source-status" class="source-status" role="status" aria-live="polite">正在读取平台真实数据…</div>
-            <div class="system-status-entry"><button id="btn-system-status" class="cyber-btn-secondary">数据源与功能实测状态</button></div>
+            <div class="system-status-entry"><button id="btn-system-status" class="cyber-btn-secondary">数据源与功能实测状态</button> <button id="btn-platform-connect" class="cyber-btn-secondary">免登录模式与数据边界</button></div>
             <div class="ranking-context" id="ranking-context">
                 <span id="ranking-scope">正在核验榜单范围…</span>
                 <details id="source-details" class="hidden"><summary>查看数据覆盖</summary><div id="source-details-content"></div></details>
@@ -296,7 +293,13 @@
                     <div>
                         <span class="globe-eyebrow"><i class="fa-solid fa-satellite-dish"></i> GLOBAL GEO RADAR</span>
                         <h2>视频关联城市分布</h2>
-                        <p>按当前视频样本中的明确地名统计，不代表作者所在地或全网总量</p>
+                        <p id="geo-source-note">按已采集视频中的明确地名统计，不代表作者所在地或全网总量</p>
+                        <div class="globe-controls">
+                            <label>样本 <select id="geo-scope"><option value="available">已采集平台汇总</option><option value="current">当前平台</option></select></label>
+                            <label>底图 <select id="geo-basemap"><option value="satellite">卫星 + 城市名称</option><option value="streets">街道地图瓦片</option></select></label>
+                            <label class="geo-layer-switch"><input type="checkbox" id="geo-countries" checked> 国家分色与名称</label>
+                            <button id="geo-refresh" class="cyber-btn-secondary">更新分布</button>
+                        </div>
                     </div>
                     <div class="globe-metrics">
                         <div class="globe-metric"><strong id="geo-city-count">0</strong><span>关联城市</span></div>
@@ -324,7 +327,7 @@
                     <h3>正在初始化 3D 空间雷达...</h3>
                     <p>正在计算全球热点城市空间坐标...</p>
                 </div>
-                <div class="globe-hint"><i class="fa-solid fa-computer-mouse"></i> 左键拖动旋转 · 滚轮缩放视角 · 点击城市节点聚焦</div>
+                <div class="globe-hint"><span id="geo-map-status">左键拖动 · 滚轮缩放 · 城市名为地理参考，彩色点才代表视频数量</span> <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">地理参考：Natural Earth（非测绘边界）</a> <a id="geo-attribution" class="hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></div>
             </section>
 
             <!-- Scrollable Content Grid -->
@@ -365,6 +368,7 @@
                 </section>
 
                 <!-- Infinite Scroll Loading Spinner -->
+                <button id="btn-load-more" class="cyber-btn-secondary hidden" style="margin:12px auto;display:block">继续加载真实作品</button>
                 <div id="infinite-loader" class="infinite-loader hidden">
                     <div class="mini-spinner"></div>
                     <span>正在加载下一批热度爆款...</span>
@@ -388,10 +392,11 @@
                     </div>
                     <h2 class="galaxy-hero-title" data-i18n="hero_title">万能音视频解析与二创工作台</h2>
                     <p class="galaxy-hero-subtitle" data-i18n="hero_subtitle">
-                        解析平台允许访问的媒体 · 有声 MP4 / 原声 MP3 · 真实字幕与语音转写 · 基于内容的重点分析。登录、地区与平台访问限制会影响可用性。
+                        无需注册或扫码 · 公开媒体有声 MP4 / 原声 MP3 · 真实字幕与语音转写 · 内容重点分析。平台地区与公开访问限制仍会影响可用性。
                     </p>
                 </div>
 
+                <p id="mt-visitor-status" class="source-status">免登录访客可直接解析、分析与下载公开视频；任务按浏览器会话隔离。</p>
                 <!-- Main Glassmorphism Sniffer & Input Card -->
                 <div class="galaxy-input-card">
                     <div class="galaxy-input-container">
@@ -947,6 +952,19 @@
         </div>
     </div>
 
+    <div id="platform-connect-modal" class="modal-overlay hidden">
+        <div class="modal-card platform-connect-content">
+            <div class="modal-header"><h2>临时设备免登录使用</h2><button id="close-platform-connect" class="close-modal-btn-x">&times;</button></div>
+            <div class="modal-body">
+                <p>榜单浏览、公开链接解析、字幕/原声分析、MP4/MP3与原图下载均无需注册、手机验证码或扫码。访客任务以当前浏览器的HttpOnly临时会话隔离，不冒充已登录账号。</p>
+                <p>B站、YouTube采用公开搜索；抖音采用官网公开精选、TikTok采用公开发现页，不注入个人登录Cookie。公开发现样本内的关键词匹配不等同于全站搜索。</p>
+                <p>只对实际公开的播放量排名。抖音等平台未公开的播放量显示未知，点赞不替代播放；不能承诺游客权限可以读取全网作者后台。</p>
+                <p>小红书、快手等源会实际尝试匿名访问；如果平台返回验证墙/没有公开列表，会明确标为该源暂不可用，不要求临时设备用户登录，也不拿其它平台数据顶替。</p>
+                <p>资源保护：访客每日20次媒体处理（解析、新任务分别计次，失败退回），同IP每日60次，单任务2GB、队列并发1。访客历史只存在当前服务进程；结果文件保留1小时。账号仅为可选的持久化历史功能。</p>
+                <p>若运营方已有YouTube/X官方API权限，可在服务器配置使用；不要求使用者持有账号或手机。没有数据源许可时，不能声称这些受限的搜索榜已经完整接通。</p>
+            </div>
+        </div>
+    </div>
     <div id="system-status-modal" class="modal-overlay hidden">
         <div class="modal-card">
             <div class="modal-header"><h2>实际连接与功能状态</h2><button id="close-system-status" class="close-modal-btn-x">&times;</button></div>
@@ -1133,7 +1151,6 @@
     <div id="toast-container" class="toast-container"></div>
 
     <script src="/vendor/jszip.min.js"></script>
-    <script src="/vendor/globe.gl.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

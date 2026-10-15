@@ -31,7 +31,7 @@ async function wait(job) {
 }
 (async () => {
     cookie=(await require('./live-auth').liveAuth(base)).cookie;
-    const report = { verifiedAt:new Date().toISOString(), videoUrl };
+    const report = { verifiedAt:new Date().toISOString(), videoUrl, accessMode:process.env.TEST_GUEST==='1'?'anonymous-visitor':'registered-session' };
     const feed = await api('/api/trends?platform=bilibili&category=tech&timeRange=3days&refresh=1');
     const now = Date.now() / 1000;
     assert.ok(feed.list.length >= 30, '科技3天实时样本需至少支持首批30个');

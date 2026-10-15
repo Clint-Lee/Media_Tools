@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         category: 'all',
         timeRange: 'all',
         searchQuery: '',
-        metricMode: 'single', // 'single' (单视频热度) | 'topic' (全网话题事件热度)
+        metricMode: 'single', // 播放量作品榜 / 官方话题榜，两种实体不能混用
         view: 'feed',         // 'feed' | 'globe'
         currentTopic: null,   // active topic in drilldown
 
@@ -272,12 +272,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PLATFORM_CONFIG = {
         bilibili:    { name: '哔哩哔哩', color: '#fb7299', glow: 'rgba(251,114,153,0.3)', badge: '官方榜单 / 高播放检索' },
-        douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '真实点赞 / 官方热搜' },
+        douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '免登录公开精选 / 播放量可能未公开' },
         youtube:     { name: 'YouTube', color: '#ff0033', glow: 'rgba(255,0,51,0.3)', badge: '官方 API / 公开搜索' },
-        tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '真实搜索 · 地区/登录限制' },
-        twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '官方 API · 需授权' },
-        xiaohongshu: { name: '小红书', color: '#ff2442', glow: 'rgba(255,36,66,0.3)', badge: '视频搜索 · 真实点赞' },
-        kuaishou:    { name: '快手热门', color: '#ff5000', glow: 'rgba(255,80,0,0.3)', badge: '视频搜索 · 真实点赞' }
+        tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '免登录公开发现 · 真实播放量' },
+        twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '免登录公开账号视频 · 第三方转述' },
+        xiaohongshu: { name: '小红书', color: '#ff2442', glow: 'rgba(255,36,66,0.3)', badge: '免登录公开推荐 · 未公开播放不入榜' },
+        kuaishou:    { name: '快手热门', color: '#ff5000', glow: 'rgba(255,80,0,0.3)', badge: '官网精彩短视频 · 实际播放量' }
     };
 
     // ── High Performance Danmaku Engine (Authentic Multi-platform Parser) ──
@@ -391,19 +391,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const danmakuEngine = new DanmakuEngine();
 
+    const scriptLoads=new Map();
+    function loadOptionalScript(src) {
+        if(!scriptLoads.has(src)) scriptLoads.set(src,new Promise((resolve,reject)=>{
+            const script=document.createElement('script'); script.src=src;
+            script.onload=resolve; script.onerror=()=>{scriptLoads.delete(src);script.remove();reject(new Error('组件加载失败，请重试'));};
+            document.head.appendChild(script);
+        }));
+        return scriptLoads.get(src);
+    }
+
     // ── 3D Globe Radar Controller (Optimized WebGL, Static View, 4-Tier Colors) ─
     class GlobeRadarController {
         constructor() {
             this.globe = null;
             this.isInitialized = false;
             this.resizeHandler = null;
+            this.cityCatalog=[];
+            this.hotspots=[];
+            this.countries=[];
+            this.countryNames=new Intl.DisplayNames(['zh-CN'],{type:'region'});
+            this.initializing=false;
         }
 
-        init(containerEl) {
-            if (!window.Globe || !containerEl || this.isInitialized) return;
+        async init(containerEl) {
+            if (!containerEl || this.isInitialized || this.initializing) return;
+            this.initializing=true;
+            const overlay=document.getElementById('globe-empty');
+            overlay?.classList.remove('hidden');
 
             try {
-                this.globe = Globe()(containerEl)
+                if(!window.Globe) await loadOptionalScript('/vendor/globe.gl.min.js');
+                this.globe = new Globe(containerEl,{animateIn:false})
                     .globeImageUrl('/vendor/earth-blue-marble.jpg')
                     .bumpImageUrl('/vendor/earth-topology.png')
                     .backgroundImageUrl('/vendor/night-sky.png')
@@ -419,17 +438,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     .pointResolution(12)
                     .pointLabel(d => `
                         <div style="background: rgba(14,18,28,0.96); border: 1px solid ${d.color || '#38bdf8'}; border-radius: 8px; padding: 8px 12px; color: #fff; font-family: Outfit, sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.6);">
-                            <div style="font-weight: 700; font-size: 13px; color: ${d.color || '#38bdf8'};">${d.city} · ${d.country}</div>
-                            <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">关联作品: ${d.countDisplay || d.count + '篇'}</div>
+                            <div style="font-weight: 700; font-size: 13px; color: ${d.color || '#38bdf8'};">${escapeHtml(d.city)} · ${escapeHtml(d.country)}</div>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">关联作品: ${d.countDisplay || d.count + '条'}</div>
                             <div style="font-size: 10.5px; color: #4ade80;">当前样本中的地名关联，非作者所在地</div>
                         </div>
                     `)
                     .onPointClick((point) => {
                         this.focusCity(point.lat, point.lng);
-                    });
+                    })
+                    .htmlLat('lat').htmlLng('lng').htmlAltitude(0.012)
+                    .htmlElement(d=>{
+                        const button=document.createElement('button'); button.className=d.kind==='country'?'geo-country-label':'geo-city-label'+(d.count?' has-samples':'');
+                        button.textContent=d.city+(d.count?' · '+d.count:'');
+                        button.dataset.lat=d.lat; button.dataset.lng=d.lng;
+                        button.title=d.kind==='country'?'国家/地区地理参考 · '+d.city:d.count?d.city+'：'+d.count+'条真实样本关联':'地理参考城市，不代表有视频';
+                        button.addEventListener('click',()=>this.focusCity(d.lat,d.lng));
+                        return button;
+                    })
+                    // CSS2DRenderer会重写display；用visibility才能真正遮住背面标签。
+                    .htmlElementVisibilityModifier((element,visible)=>{
+                        if(visible && element.classList.contains('geo-country-label')) {
+                            const pov=this.globe.pointOfView(),rad=Math.PI/180,a=Number(element.dataset.lat)*rad,b=pov.lat*rad;
+                            visible=Math.sin(a)*Math.sin(b)+Math.cos(a)*Math.cos(b)*Math.cos((Number(element.dataset.lng)-pov.lng)*rad)>0.45;
+                        }
+                        element.style.visibility=visible?'visible':'hidden';element.setAttribute('aria-hidden',String(!visible));
+                    })
+                    .polygonAltitude(0.003)
+                    .polygonCapColor(d=>this.countryColor(d))
+                    .polygonSideColor(()=> 'rgba(0,0,0,0)')
+                    .polygonStrokeColor(()=> 'rgba(205,221,242,0.25)')
+                    .polygonLabel(d=>escapeHtml(this.countryName(d)))
+                    .polygonsTransitionDuration(0)
+                    .onZoom(()=>this.updateLabels());
 
                 // Set camera altitude (Center on China / East Asia initially)
-                this.globe.pointOfView({ lat: 31.2, lng: 115.5, altitude: 2.1 }, 1000);
+                this.globe.pointOfView({ lat: 31.2, lng: 115.5, altitude: 2.1 });
 
                 // Disable auto rotation per user directive
                 const controls = this.globe.controls();
@@ -449,15 +492,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.addEventListener('resize', this.resizeHandler);
 
                 this.isInitialized = true;
+                this.updatePoints(this.hotspots);
+                this.loadCountries();
                 this.resizeHandler();
+                if(document.getElementById('geo-basemap')?.value==='streets')this.setBasemap('streets');
+                if(state.view!=='globe')this.globe.pauseAnimation();
             } catch (err) {
                 console.error('[Globe] Initialization failed:', err);
+                showToast('地球组件未能初始化，右侧仍可查看实际城市统计：'+err.message,'error');
+            } finally {
+                this.initializing=false;
+                overlay?.classList.add('hidden');
             }
         }
 
         updatePoints(hotspots) {
+            this.hotspots=hotspots || [];
             if (!this.globe) return;
-            this.globe.pointsData(hotspots || []);
+            this.globe.pointsData(this.hotspots);
+            this.updateLabels(true);
+        }
+
+        updateLabels(force=false) {
+            if(!this.globe)return;
+            const distance=this.globe.pointOfView().altitude>1.5?5:2;
+            if(!force && this.labelDistance===distance)return;
+            this.labelDistance=distance;
+            const byCity=new Map(this.hotspots.map(d=>[d.city,d]));
+            const countryLabels=document.getElementById('geo-countries')?.checked===false?[]:this.countries.filter(d=>Number(d.properties.LABELRANK)<= (distance===5?3:5)).map(d=>({kind:'country',city:this.countryName(d),lat:Number(d.properties.LABEL_Y),lng:Number(d.properties.LABEL_X)})).filter(d=>Number.isFinite(d.lat) && Number.isFinite(d.lng));
+            const rows=[...this.hotspots,...this.cityCatalog.filter(d=>!byCity.has(d.city)),...countryLabels];
+            const kept=[];
+            for(const row of rows) if(!kept.some(d=>Math.abs(d.lat-row.lat)<distance && Math.abs(d.lng-row.lng)<distance && d.kind===row.kind))kept.push(row);
+            this.globe.htmlElementsData(kept);
+        }
+
+        countryColor(feature) {
+            const colors=['163,196,239','180,213,178','231,194,158','198,182,228','161,213,211','227,175,191','211,211,157','159,194,208','205,183,159','175,190,225','194,215,194','226,189,211','204,201,231'];
+            return 'rgba('+colors[Math.max(0,Number(feature.properties.MAPCOLOR13)-1)%colors.length]+',0.16)';
+        }
+
+        countryName(feature) {
+            const code=feature.properties.ISO_A2;
+            return /^[A-Z]{2}$/.test(code)?this.countryNames.of(code):(feature.properties.NAME_ZH || feature.properties.ADMIN);
+        }
+
+        async loadCountries() {
+            try {
+                const response=await fetch('/vendor/countries.geojson',{signal:AbortSignal.timeout(10000)});
+                if(!response.ok)throw new Error('国家边界数据不可读取');
+                const data=await response.json();
+                this.countries=(data.features || []).filter(d=>d.geometry && d.properties);
+                this.updateCountries();
+            } catch(error) { showToast('国家分色图层不可用，保留城市热点：'+error.message,'info'); }
+        }
+
+        updateCountries() {
+            if(!this.globe)return;
+            this.globe.polygonsData(document.getElementById('geo-countries')?.checked===false?[]:this.countries);
+            this.updateLabels(true);
+        }
+
+        async setBasemap(mode) {
+            if(!this.globe)return;
+            const status=document.getElementById('geo-map-status'), attribution=document.getElementById('geo-attribution');
+            if(mode==='streets') {
+                status.textContent='正在连接街道瓦片…';
+                const okay=await new Promise(resolve=>{
+                    const image=new Image(),timer=setTimeout(()=>resolve(false),5000);
+                    image.crossOrigin='anonymous'; image.onload=()=>{clearTimeout(timer);resolve(true);};image.onerror=()=>{clearTimeout(timer);resolve(false);};
+                    image.src='https://tile.openstreetmap.org/0/0/0.png';
+                });
+                if(document.getElementById('geo-basemap').value!=='streets')return;
+                if(!okay) { document.getElementById('geo-basemap').value='satellite';status.textContent='街道瓦片连接失败，保留卫星底图与本地城市名称';return; }
+                this.globe.globeTileEngineMaxLevel(8).globeTileEngineUrl((x,y,z)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+                attribution.classList.remove('hidden'); status.textContent='街道地图 · 按视角加载瓦片 · 放大可见道路与更多地名';
+            } else {
+                this.globe.globeTileEngineUrl(null); attribution.classList.add('hidden');
+                status.textContent='卫星底图 + 城市名 · 彩色点为实际视频数量，白字为地理参考';
+            }
         }
 
         focusCity(lat, lng) {
@@ -494,33 +606,34 @@ document.addEventListener('DOMContentLoaded', () => {
         return readApi('/api/search-topic?' + params);
     }
 
-    async function fetchGeoRadarApi() { return readApi('/api/geo-hotspots?' + feedParams()); }
+    async function fetchGeoRadarApi(signal) {
+        const params=feedParams(); params.set('scope',document.getElementById('geo-scope')?.value || 'available');
+        return readApi('/api/geo-hotspots?' + params,{signal});
+    }
 
     function showSourceCoverage(result, mode = state.metricMode) {
         const scope = document.getElementById('ranking-scope');
         if (scope) {
-            let sortLabel = '按播放量降序';
-            if (result.scope?.metric === 'heat' || result.scope?.label?.includes('热度')) {
-                sortLabel = '按官方热度降序';
-            } else if (result.scope?.metric === 'likes') {
-                sortLabel = '按点赞量降序';
-            }
+            const sortLabel = '按真实播放量降序';
             const label = result.scope?.label || '已获取作品';
             const sortPart = label.includes(sortLabel) || label.includes('降序') ? '' : ' · ' + sortLabel;
             scope.textContent = mode === 'topic' ? '平台官方实时话题排名 · 不是视频播放榜 · 发布时效用于关联视频'
-                : label + sortPart + ' · 不代表全站历史总榜';
+                : label + sortPart + ' · 未公开播放量不参与名次 · 不代表全站历史总榜';
         }
         const details = document.getElementById('source-details');
         const content = document.getElementById('source-details-content');
         if (details) details.classList.toggle('hidden', !result.coverage);
         if (content && result.coverage) {
             const c = result.coverage;
-            content.innerHTML = `<p>收到 ${Number(c.candidates || 0)} 条候选，本批去重并筛选后 ${Number(c.unique || 0)} 条。${c.detailsVerified != null ? '首屏详情再次核验 ' + Number(c.detailsVerified) + ' 条，未能再次核验 ' + Number(c.detailsFailed || 0) + ' 条。' : ''}${result.hasMore ? '继续滚动可获取更多搜索页。' : '本批数据源已读取完毕。'}排名仅适用于已获取作品。</p>`
+            content.innerHTML = `<p>收到 ${Number(c.candidates || 0)} 条候选，${c.retainedCandidates?'另保留 '+Number(c.retainedCandidates)+' 条30分钟内真实采集缓存（未改写采集时间），':''}合并去重并筛选后 ${Number(c.unique || 0)} 条。${c.detailsVerified != null ? '首屏详情再次核验 ' + Number(c.detailsVerified) + ' 条，未能再次核验 ' + Number(c.detailsFailed || 0) + ' 条。' : ''}${result.hasMore ? '继续滚动可获取更多搜索页。' : '本批数据源已读取完毕。'}排名仅适用于已获取作品。</p>`
                 + (c.sources || []).map(source => `<div class="source-check ${source.status === 'failed' ? 'source-check-failed' : ''}">${source.status === 'failed' ? '失败' : '已读取'} · ${escapeHtml(source.name)} · ${Number(source.count || 0)} 条${source.message ? ' · ' + escapeHtml(source.message) : ''}</div>`).join('');
         }
     }
 
     async function loadData(reset = true, forceRefresh = false) {
+        clearTimeout(state.feedRefreshTimer);
+        state.refreshAttempts=reset?0:(state.refreshAttempts || 0)+1;
+        const visibleCount=reset?30:Math.max(30,state.displayedVideos.length);
         const sequence = ++state.requestSequence;
         state.feedAbort?.abort();
         state.feedAbort = new AbortController();
@@ -534,17 +647,16 @@ document.addEventListener('DOMContentLoaded', () => {
         state.displayedVideos = [];
         state.topicsList = [];
         state.currentTopic = null;
-        state.geoHotspots = [];
-        globeRadar.updatePoints([]);
-        dom.loader.classList.remove('hidden');
+        if(reset) { state.geoHotspots = []; globeRadar.updatePoints([]); }
+        dom.loader.classList.toggle('hidden',!reset);
         dom.emptyState.classList.add('hidden');
         document.getElementById('btn-empty-topics')?.classList.add('hidden');
-        dom.cardsGrid.classList.add('hidden');
-        dom.topicsGrid.classList.add('hidden');
+        if(reset) { dom.cardsGrid.classList.add('hidden'); dom.topicsGrid.classList.add('hidden'); }
         dom.topicDrilldownView.classList.add('hidden');
         dom.endHint.classList.add('hidden');
         dom.refreshBtn.classList.add('is-loading');
         dom.infiniteLoader.classList.add('hidden');
+        document.getElementById('btn-load-more')?.classList.add('hidden');
         document.getElementById('ranking-scope').textContent = '正在核验当前筛选的数据来源…';
         document.getElementById('source-details').classList.add('hidden');
         const params = feedParams();
@@ -556,9 +668,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sequence !== state.requestSequence) return;
             const list = result.list || [];
             const status = document.getElementById('source-status');
-            if (status) status.textContent = (result.sourceMessage || '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + ' · 更新 ' + new Date(result.fetchedAt || Date.now()).toLocaleTimeString();
+            if (status) status.textContent = (result.stale?'真实采集快照 · ':'') + (result.sourceMessage || '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + ' · 采集 ' + new Date(result.fetchedAt || Date.now()).toLocaleString('zh-CN');
             showSourceCoverage(result, mode);
-            if (!list.length) {
+            if (!list.length && !(mode==='single' && result.hasMore)) {
+                state.hasMore=false;
                 dom.emptyState.classList.remove('hidden');
                 dom.emptyState.querySelector('p').textContent = result.message || '当前筛选条件下没有可验证的数据，可扩大时效或切换分类。';
                 return;
@@ -574,13 +687,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.nextCursor = result.nextCursor || '';
                 state.pageSize = getResponsivePageSize();
                 state.page = 1;
-                state.displayedVideos = list.slice(0, state.pageSize);
+                state.displayedVideos = list.slice(0, visibleCount);
                 renderVideoCards(state.displayedVideos, dom.cardsGrid);
                 dom.cardsGrid.classList.remove('hidden');
-                state.hasMore = list.length > state.pageSize || state.remoteHasMore;
+                state.hasMore = list.length > state.displayedVideos.length || state.remoteHasMore;
                 dom.endHint.classList.toggle('hidden', state.hasMore);
             }
             if (state.view === 'globe') loadGeoHotspots(sequence);
+            document.getElementById('btn-load-more')?.classList.toggle('hidden',mode!=='single' || !state.hasMore);
+            if(mode==='single' && state.remoteHasMore && list.length<30)setTimeout(()=>{if(sequence===state.requestSequence)loadNextPage();},0);
+            if(result.refreshing && state.refreshAttempts<15) state.feedRefreshTimer=setTimeout(()=>{if(sequence===state.requestSequence)loadData(false);},2000);
         } catch (error) {
             if (error.name === 'AbortError' || sequence !== state.requestSequence) return;
             dom.emptyState.classList.remove('hidden');
@@ -611,6 +727,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Route restricted CDNs through proxy-image to bypass referrer/hotlink blocks
         if (
             covLower.includes('douyin') ||
+            covLower.includes('tiktokcdn') ||
+            covLower.includes('ibytedtos') ||
             covLower.includes('byteimg') ||
             covLower.includes('tos-cn-p-') ||
             covLower.includes('p26-sign') ||
@@ -641,16 +759,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const rankClass = rank === 1 ? 'top-1' : (rank === 2 ? 'top-2' : (rank === 3 ? 'top-3' : ''));
             const rankIcon = rank === 1 ? '👑 #1' : (rank === 2 ? '🥈 #2' : (rank === 3 ? '🥉 #3' : `#${rank}`));
 
-            const displayViews = video.metricDisplay || video.playCount || '未公开';
-            const metricLabel = video.metricLabel || '播放';
+            const displayViews = video.playRaw == null ? '未公开' : video.playCount;
+            const metricLabel = '播放';
             const coverUrl = getSafeCoverUrl(video);
-            const isDouyin = video.normPlatform === 'douyin' || video.platform === '抖音';
-            const statTooltip = (video.metricRaw == null ? '未公开' : Number(video.metricRaw).toLocaleString('zh-CN')) + ' ' + metricLabel + (isDouyin ? '（抖音全网对公众隐藏播放量，仅作者后台可见；当前展示官方权威热度值）' : (video.partsCount > 1 ? '（作品所有分P累计）' : '')) + ' · ' + (video.source || '平台公开数据');
+            const ranked=video.playRaw != null;
+            const statTooltip = (ranked ? Number(video.playRaw).toLocaleString('zh-CN')+' 播放' : '原始数据未提供可验证播放量，不以点赞或话题热度推算，不参与播放名次') + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.source || '平台公开数据') + (video.fetchedAt?' · '+(video.isCached?'此前真实采集 ':'采集 ')+new Date(video.fetchedAt).toLocaleString('zh-CN'):'');
 
             card.innerHTML = `
                 <div class="card-thumbnail-wrapper">
                     <img class="card-thumbnail" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(video.title)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/cover-placeholder.svg'">
-                    <span class="card-rank ${rankClass}" title="当前已获取作品内排名，不是全站历史排名">${rankIcon}</span>
+                    <span class="card-rank ${ranked?rankClass:''}" title="${ranked?'当前已获取作品内播放排名':'缺少真实播放量，未参与排名'}">${ranked?rankIcon:'未入播放榜'}</span>
                     <span class="card-duration">${escapeHtml(video.duration || 'Shorts')}</span>
                     <div class="card-play-btn">
                         <div class="card-play-btn-inner"><i class="fa-solid fa-play"></i></div>
@@ -668,10 +786,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i class="fa-solid fa-circle-user"></i> ${escapeHtml(video.author || '达人')}
                         </span>
                         <div class="card-stats" title="${escapeHtml(statTooltip)}">
-                            <i class="fa-solid fa-fire"></i>
+                            <i class="fa-regular fa-eye"></i>
                             <span>${escapeHtml(displayViews)} ${escapeHtml(metricLabel)}</span>
                         </div>
                     </div>
+                    ${video.likeRaw==null?'':`<div class="card-secondary-metric">${escapeHtml(video.likeDisplay || formatHeat(video.likeRaw))} 点赞 · 辅助指标，不用于排名</div>`}
                 </div>
             `;
 
@@ -780,10 +899,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getResponsivePageSize() {
-        const gridWidth = dom.cardsGrid?.clientWidth || (window.innerWidth - 260);
-        const cols = Math.max(1, Math.floor((gridWidth + 18) / 288));
-        // 根据当前屏幕排布列数，智能分配 5~6 行视频（至少 25 条）
-        return Math.max(25, cols * 5);
+        return 30;
     }
 
     // ── Infinite Scroll Pagination ──────────────────────────────────
@@ -819,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.nextCursor = result.nextCursor || '';
                 const byId = new Map(state.allVideos.map(video => [video.normPlatform + ':' + video.id, video]));
                 for (const video of result.list || []) byId.set(video.normPlatform + ':' + video.id, video);
-                state.allVideos = [...byId.values()].sort((a, b) => Number(b.metricRaw || 0) - Number(a.metricRaw || 0) || b.pubdate - a.pubdate);
+                state.allVideos = [...byId.values()].sort((a,b)=>(a.playRaw==null)-(b.playRaw==null) || Number(b.playRaw)-Number(a.playRaw) || b.pubdate-a.pubdate);
                 showSourceCoverage(result);
                 const status = document.getElementById('source-status');
                 if (status) status.textContent = (result.sourceMessage || '') + ` · 已读取 ${state.remotePage} 批 · 累计 ${state.allVideos.length} 个作品`;
@@ -832,6 +948,9 @@ document.addEventListener('DOMContentLoaded', () => {
             else renderVideoCards(state.displayedVideos.slice(currentLength), dom.cardsGrid, true, currentLength);
             state.hasMore = state.displayedVideos.length < state.allVideos.length || state.remoteHasMore;
             dom.endHint.classList.toggle('hidden', state.hasMore);
+            document.getElementById('btn-load-more')?.classList.toggle('hidden',!state.hasMore);
+            dom.emptyState.classList.toggle('hidden',state.displayedVideos.length>0);
+            if(!state.displayedVideos.length)dom.emptyState.querySelector('p').textContent='当前公开样本批次没有匹配视频。'+(state.remoteHasMore?'仍有后续样本，可点击继续加载；这不是全站检索结果。':'已读取的公开样本已结束，不代表全平台没有相关视频。');
         } catch (error) {
             if (error.name !== 'AbortError' && sequence === state.requestSequence) {
                 showToast('继续加载失败：' + error.message + '。再次滚动可重试。', 'error');
@@ -846,12 +965,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── 3D Geo Radar Data Synchronizer (All 48 Cities & Multi-Tier Metrics) ─
     async function loadGeoHotspots(sequence = state.requestSequence) {
+        state.geoAbort?.abort();
+        state.geoAbort=new AbortController();
+        const geoSequence=(state.geoSequence || 0)+1; state.geoSequence=geoSequence;
+        document.getElementById('geo-source-note').textContent='正在统计真实视频样本，不会把地理参考城市算作视频…';
         try {
-            const data = await fetchGeoRadarApi();
-            if (sequence !== state.requestSequence) return;
+            const data = await fetchGeoRadarApi(state.geoAbort.signal);
+            if (sequence !== state.requestSequence || geoSequence!==state.geoSequence) return;
             const hotspots = Array.isArray(data.list) ? data.list : (Array.isArray(data.hotspots) ? data.hotspots : []);
 
             state.geoHotspots = hotspots;
+            state.geoMetadata = data;
+            globeRadar.cityCatalog=data.cityCatalog || [];
+            document.getElementById('geo-source-note').textContent=(data.scope==='available'?'已采集平台汇总':'当前平台')+'：'+(data.platforms || []).map(p=>PLATFORM_CONFIG[p]?.name || p).join(' / ')+' · '+data.sampleSize+'条真实样本 · '+hotspots.length+'个关联城市 · 非作者所在地'+(data.collectedAt?' · 最早采集 '+new Date(data.collectedAt).toLocaleTimeString('zh-CN'):'');
 
             // Update Metrics
             dom.geoCityCount.textContent = hotspots.length;
@@ -864,17 +990,19 @@ document.addEventListener('DOMContentLoaded', () => {
             renderHotspotList(hotspots);
 
             // Update Globe 3D Points
-            if (globeRadar.isInitialized) {
-                globeRadar.updatePoints(hotspots);
-            }
+            // 数据可能先于按需加载的地球库返回；始终保存，初始化完成后再绘制。
+            globeRadar.updatePoints(hotspots);
         } catch (err) {
+            if(err.name==='AbortError')return;
             console.error('[Geo] Load failed:', err);
-            if (sequence !== state.requestSequence) return;
+            if (sequence !== state.requestSequence || geoSequence!==state.geoSequence) return;
             state.geoHotspots = [];
             globeRadar.updatePoints([]);
             if (dom.hotspotList) dom.hotspotList.innerHTML = `<p class="source-status">${escapeHtml(err.message)}</p>`;
             if (dom.geoCityCount) dom.geoCityCount.textContent = '0';
+            if (dom.geoVideoCount) dom.geoVideoCount.textContent = '0条';
             if (dom.geoCoverage) dom.geoCoverage.textContent = '源不可用';
+            document.getElementById('geo-source-note').textContent='该范围没有可用样本：'+err.message;
         }
     }
 
@@ -887,7 +1015,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tierClass = spot.tier || 'normal';
             row.innerHTML = `
                 <span><i class="legend-dot ${tierClass}"></i> <strong>${escapeHtml(spot.city)}</strong> · ${escapeHtml(spot.country)}</span>
-                <span style="color: ${spot.color || '#38bdf8'}; font-weight: 700;">${escapeHtml(spot.countDisplay || formatHeat(spot.count) + '篇')}</span>
+                <span style="color: ${spot.color || '#38bdf8'}; font-weight: 700;">${escapeHtml(spot.countDisplay || formatHeat(spot.count) + '条')}</span>
             `;
             row.addEventListener('click', () => {
                 globeRadar.focusCity(spot.lat, spot.lng);
@@ -903,8 +1031,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.modalPlatformBadge.textContent = video.platform || state.platform.toUpperCase();
         dom.modalVideoTitle.textContent = video.title || '视频播放';
         dom.modalVideoAuthor.innerHTML = `<i class="fa-regular fa-user"></i> ${escapeHtml(video.author || '达人')}`;
-        const isDouyin = video.normPlatform === 'douyin' || video.platform === '抖音';
-        dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(video.metricDisplay || video.playCount || '未公开')} ${escapeHtml(video.metricLabel || '播放')}${isDouyin ? ' <span style="font-size:12px;opacity:0.75;font-weight:normal;">(抖音全网不公开播放量)</span>' : ''}`;
+        dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(video.playRaw==null?'播放量未公开 · 不参与排名':video.playCount+' 播放')}${video.likeRaw==null?'':' · '+escapeHtml(video.likeDisplay || formatHeat(video.likeRaw))+' 点赞'}`;
 
         // Direct Original Platform Link in New Tab
         dom.modalOpenOriginBtn.href = video.url || '#';
@@ -998,7 +1125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Stream Sniffer & Video Action Tools ──────────────────────────
     async function sniffVideoDirectStream(video, btnEl) {
         if (!video) return;
-        if (!requireLogin()) return;
         const targetUrl = video.url;
         if (!targetUrl) return showToast('作品缺少原平台链接，未构造其它平台的视频地址', 'error');
 
@@ -1110,7 +1236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             menu_logout: '退出登录',
             hero_badge: '万热观象 · HEAT HUB 全能媒体工作台',
             hero_title: '万能音视频解析与二创工作台',
-            hero_subtitle: '解析平台允许访问的媒体 · 有声 MP4 / 原声 MP3 · 真实字幕与语音转写 · 基于内容的重点分析。登录、地区与平台访问限制会影响可用性。',
+            hero_subtitle: '无需注册或扫码 · 公开媒体 MP4 / 原声 MP3 · 真实字幕与语音转写 · 基于内容的重点分析。地区与平台公开访问限制仍可能影响可用性。',
             btn_download_mp4: '下载无水印原画视频 (MP4)',
             btn_extract_mp3: '提取纯音频 (MP3)',
             btn_copy_stream: '复制下载直链',
@@ -1439,7 +1565,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function requireLogin() {
         if (state.user) return true;
         dom.authModal?.classList.remove('hidden');
-        showToast('请注册或登录真实账号，访客可浏览榜单', 'info');
+        showToast('账号资料需要登录；访客无需登录即可浏览、分析与下载公开媒体', 'info');
         return false;
     }
 
@@ -1769,7 +1895,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         async extract(inputUrl) {
-            if (!requireLogin()) return;
             if (!inputUrl || !inputUrl.trim()) {
                 showToast('请先输入或粘贴视频/图文链接', 'warning');
                 dom.mtInputUrl?.focus();
@@ -2169,17 +2294,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         async prepareDownload(kind, button) {
-            if (!requireLogin()) return;
             const data = this.activeData;
             if (!data) return;
             const original = button?.innerHTML;
-            const owner = state.user.username;
+            const owner = state.user?.username || null;
             if (button) button.disabled = true;
             try {
                 const job = await this.pollJob(kind, data, current => {
                     if (button) button.textContent = current.message + ' ' + current.progress + '%';
                 });
-                if (state.user?.username !== owner) return;
+                if ((state.user?.username || null) !== owner) return;
                 if (!job.downloadUrl) throw new Error('文件尚未生成');
                 this.triggerDownload(job.downloadUrl, data.title);
                 if (kind === 'download' && data === this.activeData && dom.mtNativeVideo) {
@@ -2308,13 +2432,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         async downloadSingleImage(url, title) {
-            if (!requireLogin()) return;
             try { const image = await this.readOriginalImage(url); this.saveBlob(image.blob, (title || 'image').replace(/[\\/:*?"<>|]/g,'_') + '.' + image.ext); this.renderHistory(); }
             catch (error) { showToast(error.message, 'error'); }
         }
 
         async downloadAllImagesAsZip(title, images) {
-            if (!requireLogin()) return;
             if (typeof JSZip === 'undefined') return showToast('图片打包组件不可用', 'error');
             const zip = new JSZip(), clean = (title || 'images').replace(/[\\/:*?"<>|]/g,'_'), failures = [];
             let completed = 0, cursor = 0;
@@ -2335,27 +2457,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 服务端按账号隔离的实际处理记录；解析、生成与发送状态不混为“已下载”。
         async removeHistoryItem(id) {
-            try { await readApi('/api/account/history/' + encodeURIComponent(id), { method: 'DELETE' }); await this.renderHistory(); }
+            try { await readApi('/api/media/history/' + encodeURIComponent(id), { method: 'DELETE' }); await this.renderHistory(); }
             catch (error) { showToast(error.message, 'error'); }
         }
 
         async clearHistory() {
-            if (!requireLogin()) return;
-            try { await readApi('/api/account/history', { method: 'DELETE' }); await this.renderHistory(); showToast('本账号处理记录已清空', 'info'); }
+            try { await readApi('/api/media/history', { method: 'DELETE' }); await this.renderHistory(); showToast('当前会话处理记录已清空', 'info'); }
             catch (error) { showToast(error.message, 'error'); }
         }
 
         async renderHistory() {
             if (!dom.mtHistoryList) return;
-            const owner = state.user?.username;
-            if (!owner) {
-                dom.mtHistoryList.innerHTML = '<p class="history-empty">请登录查看本账号的真实处理记录；不读取其它账号或浏览器演示记录。</p>';
-                if (dom.mtHistoryCount) dom.mtHistoryCount.textContent = '0';
-                return;
-            }
+            const owner = state.user?.username || null;
             try {
-                const response = await readApi('/api/account/history');
-                if (state.user?.username !== owner) return;
+                const response = await readApi('/api/media/history');
+                if ((state.user?.username || null) !== owner) return;
+                const note=document.getElementById('mt-visitor-status');
+                if(note)note.textContent=response.visitor?'免登录访客 · 当前浏览器会话 · 今日剩余 '+response.quota.remaining+' / '+response.quota.limit+' 次处理；解析和新任务分别计次，失败退回。':'当前账号的实际处理记录与额度；访客无需注册也可使用。';
                 const list = response.list || [];
                 if (dom.mtHistoryCount) dom.mtHistoryCount.textContent = list.length;
                 const statuses = { parsed: '已解析（尚未下载）', prepared: '已生成结果', sent: '服务端已发送文件（不代表已保存到磁盘）', streamed:'已发送媒体预览/片段', failed: '处理失败' };
@@ -2364,11 +2482,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     '<div class="history-item-row"><div class="hist-info"><div class="hist-title-row"><span class="hist-plat-badge">' + escapeHtml(kinds[item.kind] || item.kind) + '</span><span class="hist-title">' + escapeHtml(item.title || '处理记录') + '</span></div><span class="hist-time">' + escapeHtml(statuses[item.status] || item.status) + ' · ' + new Date(item.timestamp).toLocaleString() + '</span></div><div class="hist-actions">' +
                     (item.url ? '<button class="btn-hist-reparse" data-url="' + escapeHtml(item.url) + '">重新解析</button>' : '') +
                     '<button class="btn-hist-del" data-id="' + escapeHtml(item.id) + '">删除记录</button></div></div>'
-                ).join('') : '<p class="history-empty">本账号暂无实际处理记录。</p>';
+                ).join('') : '<p class="history-empty">当前会话暂无实际处理记录；粘贴公开视频链接即可分析或下载，无需登录。</p>';
                 dom.mtHistoryList.querySelectorAll('.btn-hist-reparse').forEach(button => button.addEventListener('click', () => { dom.mtInputUrl.value = button.dataset.url; this.extract(button.dataset.url); }));
                 dom.mtHistoryList.querySelectorAll('.btn-hist-del').forEach(button => button.addEventListener('click', () => this.removeHistoryItem(button.dataset.id)));
             } catch (error) {
-                if (state.user?.username === owner) dom.mtHistoryList.textContent = '处理记录读取失败：' + error.message;
+                if ((state.user?.username || null) === owner) dom.mtHistoryList.textContent = '处理记录读取失败：' + error.message;
             }
         }
 
@@ -2403,6 +2521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Main View Switching Engine ──────────────────────────────────
     function switchMainView(view) {
         state.view = view;
+        dom.platformTitle.textContent=view==='globe'?'热点地球':view==='mediatools'?'媒体工作台':(PLATFORM_CONFIG[state.platform]?.name || state.platform);
+        document.getElementById('ranking-context')?.classList.toggle('hidden',view!=='feed');
+        document.getElementById('source-status')?.classList.toggle('hidden',view!=='feed');
         dom.viewSwitchBtns.forEach(b => {
             b.classList.toggle('active', b.dataset.view === view);
         });
@@ -2437,14 +2558,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 globeRadar.init(dom.globeStage);
             }
             globeRadar.updatePoints(state.geoHotspots);
+            globeRadar.globe?.resumeAnimation();
             requestAnimationFrame(() => globeRadar.resizeHandler?.());
             loadGeoHotspots();
         } else if (view === 'mediatools') {
+            globeRadar.globe?.pauseAnimation();
             dom.globeView?.classList.add('hidden');
             dom.gridScrollArea?.classList.add('hidden');
             dom.categoryFiltersContainer?.classList.add('hidden');
             dom.mediatoolsView?.classList.remove('hidden');
         } else {
+            globeRadar.globe?.pauseAnimation();
             dom.globeView?.classList.add('hidden');
             dom.mediatoolsView?.classList.add('hidden');
             dom.categoryFiltersContainer?.classList.remove('hidden');
@@ -2785,11 +2909,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function init() {
         bindEvents();
-        for(const id of ['system-status-modal','account-edit-modal']) {
+        document.getElementById('btn-load-more')?.addEventListener('click',()=>loadNextPage());
+        document.getElementById('geo-scope')?.addEventListener('change',()=>loadGeoHotspots());
+        document.getElementById('geo-refresh')?.addEventListener('click',()=>loadGeoHotspots());
+        document.getElementById('geo-basemap')?.addEventListener('change',event=>globeRadar.setBasemap(event.target.value));
+        document.getElementById('geo-countries')?.addEventListener('change',()=>globeRadar.updateCountries());
+        for(const id of ['system-status-modal','account-edit-modal','platform-connect-modal']) {
             const modal=document.getElementById(id);
             modal?.addEventListener('click',event=>{if(event.target===modal)modal.classList.add('hidden');});
         }
-        window.addEventListener('keydown',event=>{if(event.key==='Escape')for(const id of ['system-status-modal','account-edit-modal'])document.getElementById(id)?.classList.add('hidden');});
+        window.addEventListener('keydown',event=>{if(event.key==='Escape')for(const id of ['system-status-modal','account-edit-modal','platform-connect-modal'])document.getElementById(id)?.classList.add('hidden');});
+        document.getElementById('btn-platform-connect')?.addEventListener('click',()=>document.getElementById('platform-connect-modal').classList.remove('hidden'));
+        document.getElementById('close-platform-connect')?.addEventListener('click',()=>document.getElementById('platform-connect-modal').classList.add('hidden'));
         document.getElementById('btn-system-status')?.addEventListener('click', async () => {
             document.getElementById('system-status-modal').classList.remove('hidden');
             const body=document.getElementById('system-status-body'); body.textContent='正在读取当前实际状态…';
@@ -2819,9 +2950,7 @@ document.addEventListener('DOMContentLoaded', () => {
             catch (error) { showToast(error.message, 'error'); }
         });
         loadPlatformCapabilities();
-        await initUserSession();
-        await loadSettings();
-        await loadData(true);
+        await Promise.allSettled([initUserSession(),loadSettings(),loadData(true)]);
     }
 
     init();

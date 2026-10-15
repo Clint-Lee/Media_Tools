@@ -2,6 +2,12 @@
 // 联网验收使用真实本地注册账号；凭证仅写忽略于Git的私有验收缓存，不输出日志。
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 async function liveAuth(base) {
+    if(process.env.TEST_GUEST==='1'){
+        const response=await fetch(base),cookie=response.headers.get('set-cookie')?.split(';')[0];
+        if(!cookie?.startsWith('hotpot_visitor='))throw new Error('未能建立免登录访客会话');
+        if((await fetch(base+'/api/auth/me',{headers:{Cookie:cookie}})).status!==401)throw new Error('访客验收不能偷偷登录账号');
+        return {cookie,username:null,guest:true};
+    }
     const filename=path.join(__dirname,'..','.cache','verification','test-account.json');
     let credentials;
     if(process.env.TEST_ACCOUNT_USERNAME && process.env.TEST_ACCOUNT_PASSWORD) credentials={username:process.env.TEST_ACCOUNT_USERNAME,password:process.env.TEST_ACCOUNT_PASSWORD};
