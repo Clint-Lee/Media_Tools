@@ -13,7 +13,8 @@ const base=process.env.TEST_BASE_URL || 'http://127.0.0.1:4000';
             if(response.ok) {
                 assert.equal(data.success,true); assert.ok(Array.isArray(data.list));
                 if(kind==='videos') { assert.equal(data.scope.exhaustive,false); assert.ok(data.list.every(v=>v.id && v.title && v.url),'作品必须有原平台身份与链接'); }
-                entry[kind]={status:'verified-response',count:data.list.length,source:data.source,metric:data.scope?.metric,partial:data.partial || false,message:data.sourceMessage};
+                entry[kind]={status:'verified-response',count:data.list.length,source:data.source,metric:data.scope?.metric,partial:data.partial || false,message:data.sourceMessage,
+                    ...(kind==='videos'?{dataQuality:data.dataQuality}: {})};
             } else {
                 assert.equal(data.success,false); assert.equal(data.list.length,0,'访问失败不能替换成固定素材');
                 entry[kind]={status:'unavailable',httpStatus:response.status,message:data.message};

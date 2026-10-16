@@ -30,12 +30,12 @@ let sources=require('../lib/live-sources');
     const discovery=require('../lib/public-discovery'),originalTag=discovery.tiktokTagPool;
     try {
         discovery.tiktokTagPool=async()=>({list:[]});
-        const handlers={},late={},initial={},current={},extra={};
+        const handlers={},late={url:()=>'/same-api'},initial={url:()=>'/same-api'},current={url:()=>'/same-api'},extra={url:()=>'/same-api'};
         const item=(suffix)=>({id:'712345678901234'+String(suffix).padStart(4,'0'),desc:'隔离分区作品',author:{uniqueId:'fixture'},video:{},stats:{playCount:100}});
         const emit=(kind,value)=>handlers[kind]?.forEach(fn=>fn(value));
         const response=(request,items)=>emit('response',{url:()=> 'https://www.tiktok.com/api/explore/item_list/',request:()=>request,json:async()=>({itemList:items,hasMore:false})});
         browser.lightweightPage=async()=>{};
-        browser.clickCategory=async()=>{response(late,[item(999)]);emit('request',current);response(current,[item(1)]);return true;};
+        browser.clickCategory=async()=>{emit('request',current);response(late,[item(999)]);response(current,[item(1)]);return true;};
         browser.scrollMore=async()=>{emit('request',extra);response(extra,Array.from({length:59},(_,i)=>item(i+2)));};
         const page={on:(kind,fn)=>(handlers[kind] ||= []).push(fn),goto:async()=>{emit('request',initial);response(initial,[item(998)]);emit('request',late);}};
         const category=await rankings.publicPageVideos({platform:'tiktok',category:'comedy',query:'',timeRange:'all',page:1},{withPage:async(platform,worker)=>worker(page)});

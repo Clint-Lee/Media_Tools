@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '免登录公开精选 / 播放量可能未公开' },
         youtube:     { name: 'YouTube', color: '#ff0033', glow: 'rgba(255,0,51,0.3)', badge: '官方 API / 公开搜索' },
         tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '免登录公开发现 · 真实播放量' },
-        twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '免登录公开账号视频 · 第三方转述' },
+        twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '公开账号视频 · 官方匿名播放统计' },
         xiaohongshu: { name: '小红书', color: '#ff2442', glow: 'rgba(255,36,66,0.3)', badge: '免登录公开推荐 · 未公开播放不入榜' },
         kuaishou:    { name: '快手热门', color: '#ff5000', glow: 'rgba(255,80,0,0.3)', badge: '官网精彩短视频 · 实际播放量' }
     };
@@ -606,6 +606,15 @@ document.addEventListener('DOMContentLoaded', () => {
             : state.searchQuery ? '/api/search?' : '/api/trends?';
     }
 
+    function showVideoQuality(quality) {
+        if (!quality) return;
+        const label = quality.status === 'empty' ? '本次筛选无视频' : quality.status === 'metadata-only' ? '视频可见 · 播放量未取得'
+            : quality.status === 'cached' ? '历史快照 · 非实时' : quality.withoutViews ? '部分作品有真实播放量' : '真实视频与播放量';
+        if (dom.platformStatusBadge) dom.platformStatusBadge.textContent = label;
+        const subtitle = document.querySelector('.nav-btn[data-platform="' + state.platform + '"] .nav-btn-sub');
+        if (subtitle) subtitle.textContent = `${quality.videos}件视频 · ${quality.withViews}件有播放量`;
+    }
+
     async function fetchTopicVideosApi(topic) {
         const params = feedParams();
         params.set('query', topic.title);
@@ -678,8 +687,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
             if (sequence !== state.requestSequence) return;
             const list = result.list || [];
+            if (mode === 'single') showVideoQuality(result.dataQuality);
             const status = document.getElementById('source-status');
-            if (status) status.textContent = (result.historical ? '历史采集 · ' : result.stale?'真实采集快照 · ':'') + (result.sourceMessage || '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + (result.fetchedAt ? ' · 采集 ' + new Date(result.fetchedAt).toLocaleString('zh-CN') : '') + (result.collection?.status === 'write-failed' ? ' · ' + result.collection.message : '');
+            if (status) status.textContent = (result.historical ? '历史采集 · ' : result.stale?'真实采集快照 · ':'') + (result.sourceMessage || '') + (result.dataQuality ? ` · 当前${result.dataQuality.videos}件视频，${result.dataQuality.withViews}件有真实播放量，${result.dataQuality.withoutViews}件未取得播放量` : '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + (result.fetchedAt ? ' · 采集 ' + new Date(result.fetchedAt).toLocaleString('zh-CN') : '') + (result.collection?.status === 'write-failed' ? ' · ' + result.collection.message : '');
             showSourceCoverage(result, mode);
             if (!list.length && !(mode!=='topic' && result.hasMore)) {
                 state.hasMore=false;
@@ -770,11 +780,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const rankClass = rank === 1 ? 'top-1' : (rank === 2 ? 'top-2' : (rank === 3 ? 'top-3' : ''));
             const rankIcon = rank === 1 ? '👑 #1' : (rank === 2 ? '🥈 #2' : (rank === 3 ? '🥉 #3' : `#${rank}`));
 
-            const displayViews = video.playRaw == null ? '未公开' : video.playCount;
+            const displayViews = video.playRaw == null ? '未公开' : (video.viewPrecision === 'source-rounded' ? '约 ' : '') + (video.viewCountText || video.playCount);
             const metricLabel = '播放';
             const coverUrl = getSafeCoverUrl(video);
             const ranked=video.playRaw != null;
-            const statTooltip = (ranked ? Number(video.playRaw).toLocaleString('zh-CN')+' 播放' : '原始数据未提供可验证播放量，不以点赞或话题热度推算，不参与播放名次') + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.source || '平台公开数据') + (video.fetchedAt?' · '+(video.isCached?'此前真实采集 ':'采集 ')+new Date(video.fetchedAt).toLocaleString('zh-CN'):'');
+            const statTooltip = (ranked ? (video.viewPrecision === 'source-rounded' ? '约 ' : '')+Number(video.playRaw).toLocaleString('zh-CN')+' 播放' : '原始数据未提供可验证播放量，不以点赞或话题热度推算，不参与播放名次') + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.source || '平台公开数据') + (video.fetchedAt?' · '+(video.isCached?'此前真实采集 ':'采集 ')+new Date(video.fetchedAt).toLocaleString('zh-CN'):'') + (video.viewSource ? ' · 播放来源 '+video.viewSource+' · '+new Date(video.viewsFetchedAt).toLocaleString('zh-CN') : '');
 
             card.innerHTML = `
                 <div class="card-thumbnail-wrapper">
@@ -803,6 +813,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     ${video.likeRaw==null?'':`<div class="card-secondary-metric">${escapeHtml(video.likeDisplay || formatHeat(video.likeRaw))} 点赞 · 辅助指标，不用于排名</div>`}
                     ${video.lastSeenAt ? `<div class="card-collected-at">历史采集 · ${escapeHtml(new Date(video.lastSeenAt).toLocaleString('zh-CN'))}</div>` : ''}
+                    ${video.viewPrecision === 'source-rounded' ? '<div class="card-collected-at">播放量为平台公开缩写，非精确整数</div>' : ''}
                 </div>
             `;
 
@@ -942,6 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
                 if (sequence !== state.requestSequence) return;
                 fetchedRemote = true;
+                if (state.metricMode === 'single') showVideoQuality(result.dataQuality);
                 state.remotePage++;
                 state.remoteHasMore = Boolean(result.hasMore);
                 state.nextCursor = result.nextCursor || '';
@@ -2926,7 +2938,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!button) continue;
                 const subtitle = button.querySelector('.nav-btn-sub');
                 const status=item.verification?.videos?.status;
-                if (subtitle) subtitle.textContent = status==='unavailable' ? '视频源受限 · 查看状态' : item.label;
+                const quality = item.verification?.videos?.dataQuality;
+                if (subtitle) subtitle.textContent = status==='unavailable' ? '视频源受限 · 查看状态' : quality ? `${quality.videos}件视频 · ${quality.withViews}件有播放量` : item.label;
                 button.title = item.label + '；排名仅覆盖实际检索作品，非全站历史总榜。';
             }
         } catch { /* 平台说明失败不阻止真实作品加载。 */ }
@@ -2953,7 +2966,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data=await readApi('/api/system/status');
                 const statuses={ok:'已读取真实数据',partial:'部分源失败',cached:'真实缓存（非实时）',unavailable:'未取得数据','not-verified':'尚未实测'};
                 body.innerHTML='<p>账号为真实服务端会话；没有演示提权。语音模型配置：'+(data.media.asr?'存在':'缺失')+'；语义模型配置：'+(data.media.localAnalysis?'存在':'缺失')+'。模型存在不代表本次分析已通过，结果需查看实际任务。</p><p>'+escapeHtml(data.note)+'</p>'+
-                    data.platforms.map(p=>'<div class="source-check"><strong>'+escapeHtml(PLATFORM_CONFIG[p.platform]?.name || p.platform)+'</strong><p>视频：'+escapeHtml(statuses[p.verification.videos.status] || p.verification.videos.status)+'；话题：'+(p.topics==='unavailable'?'尚未接通':escapeHtml(statuses[p.verification.topics.status] || p.verification.topics.status))+'</p><p>'+escapeHtml(p.verification.videos.message || p.label)+'</p></div>').join('');
+                    data.platforms.map(p=>'<div class="source-check"><strong>'+escapeHtml(PLATFORM_CONFIG[p.platform]?.name || p.platform)+'</strong><p>视频：'+escapeHtml(statuses[p.verification.videos.status] || p.verification.videos.status)+'；话题：'+(p.topics==='unavailable'?'尚未接通':escapeHtml(statuses[p.verification.topics.status] || p.verification.topics.status))+'</p>'+(p.verification.videos.dataQuality?'<p>本次 '+Number(p.verification.videos.dataQuality.videos)+' 件视频，'+Number(p.verification.videos.dataQuality.withViews)+' 件有真实播放量，'+Number(p.verification.videos.dataQuality.withoutViews)+' 件未取得播放量。视频信息可见不等于播放数据可用。</p>':'')+'<p>'+escapeHtml(p.verification.videos.message || p.label)+'</p></div>').join('');
             } catch(error){body.textContent='状态读取失败：'+error.message;}
         });
         document.getElementById('close-system-status')?.addEventListener('click',()=>document.getElementById('system-status-modal').classList.add('hidden'));

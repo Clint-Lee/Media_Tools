@@ -51,6 +51,8 @@ const app = require('../server');
         assert.equal(r.status, 200); assert.equal(r.data.success, true);
         assert.equal(calls.at(-1).timeRange, '3days'); assert.equal(calls.at(-1).category, 'tech'); assert.equal(calls.at(-1).query, 'AI');
         assert.equal(r.data.list[0].playRaw, 12345);
+        assert.equal(r.data.dataQuality.status,'ready');
+        assert.equal(r.data.dataQuality.withViews,2);
         assert.equal(r.data.scope.exhaustive, false); assert.equal(r.data.nextCursor, 'real-next');
         assert.equal(r.data.hasMore, true); assert.equal(r.data.coverage.candidates, 2);
         await get('/api/search?platform=bilibili&query=AI&page=2&cursor=next');

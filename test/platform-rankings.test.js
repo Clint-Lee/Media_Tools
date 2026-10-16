@@ -55,5 +55,24 @@ assert.equal(rankings.xVideos({ data: [{ id: '123', text: '非视频' }] }).leng
         axios.get = original;
         if (originalKey === undefined) delete process.env.YOUTUBE_API_KEY; else process.env.YOUTUBE_API_KEY = originalKey;
     }
+    const originalToken=process.env.X_BEARER_TOKEN, originalArchive=process.env.X_SEARCH_ARCHIVE;
+    process.env.X_BEARER_TOKEN='isolated-x-token'; process.env.X_SEARCH_ARCHIVE='0';
+    axios.get=async (url,config)=>{
+        assert.ok(url.endsWith('/tweets/search/recent'));
+        assert.ok(config.params['media.fields'].includes('public_metrics'));
+        assert.equal(config.headers.Authorization,'Bearer isolated-x-token');
+        return {data:{data:[{id:'2110094874024219133',text:'官方视频用例',author_id:'u',attachments:{media_keys:['m']}}],
+            includes:{users:[{id:'u',username:'fixture'}],media:[{media_key:'m',type:'video',preview_image_url:'https://pbs.twimg.com/fixture.jpg',public_metrics:{view_count:123456}}]}}};
+    };
+    try {
+        const recent=await rankings.xApiVideos({category:'all',query:'',timeRange:'all'});
+        assert.equal(recent.list[0].playRaw,123456,'官方媒体指标必须映射到视频播放量');
+        assert.equal(recent.scope.lookbackDays,7,'默认全部时间可以读取有权限的近7天样本，并明确范围');
+        await assert.rejects(()=>rankings.xApiVideos({category:'all',query:'',timeRange:'6months'}),/近7天/);
+    } finally {
+        axios.get=original;
+        if(originalToken===undefined)delete process.env.X_BEARER_TOKEN;else process.env.X_BEARER_TOKEN=originalToken;
+        if(originalArchive===undefined)delete process.env.X_SEARCH_ARCHIVE;else process.env.X_SEARCH_ARCHIVE=originalArchive;
+    }
     console.log('platform-rankings tests passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

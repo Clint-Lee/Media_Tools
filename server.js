@@ -652,7 +652,8 @@ async function handleLiveVideos(req, res) {
         return sendVideoList(res, result.list, options.timeRange, {
             source: result.source, sourceMessage: result.message, partial: result.partial || false,
             hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false, refreshing:result.refreshing || false,
-            fetchedAt: result.list[0]?.fetchedAt || Date.now(), collection: result.collection
+            fetchedAt: result.list[0]?.fetchedAt || Date.now(), collection: result.collection,
+            dataQuality: require('./lib/data-quality').videoDataQuality(result.list, result)
         });
     } catch (error) {
         return res.status(502).json({ success: false, error: 'LIVE_SOURCE_UNAVAILABLE', list: [], message: error.message });
