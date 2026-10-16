@@ -5224,6 +5224,32 @@ html, body {
 }
 .ranking-context { display: flex; align-items: flex-start; gap: 16px; padding: 0 28px 10px; color: #94a3b8; font-size: 12px; flex-wrap: wrap; }
 .header-platform-box { flex-shrink: 0; }
+.main-content { min-width: 0; }
+.card-collected-at { color: var(--text-secondary); font-size: 11px; margin-top: 8px; line-height: 1.5; }
+/* Keep all three source modes reachable alongside search at smaller widths. */
+@media (max-width: 1600px) {
+    .content-header { height: auto; min-height: var(--header-h); flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; gap: 12px; }
+    .header-search-section { order: 3; flex-basis: 100%; max-width: none; min-width: 0; flex-wrap: wrap; }
+    .search-bar-inner { min-width: 0; }
+}
+@media (max-width: 900px) {
+    .app-container { grid-template-columns: 66px minmax(0, 1fr); }
+    .sidebar { padding: 16px 6px; }
+    .sidebar .logo-info, .sidebar .live-status-pill, .nav-btn-text, .nav-btn-indicator, .nav-tool-badge, .sidebar-section-title, .sidebar-footer .footer-btn span { display: none; }
+    .sidebar .logo, .sidebar .nav-btn { justify-content: center; padding-left: 0; padding-right: 0; }
+    .content-header { padding: 10px 12px; }
+    .header-actions-group { margin-left: auto; gap: 6px; }
+    .header-actions-group .view-switcher span, .header-actions-group .user-login-trigger span { display: none; }
+    .header-platform-box { min-width: 0; }
+    .header-platform-box h1 { font-size: 18px; }
+    .metric-mode-toggle { width: 100%; min-width: 0; }
+    .metric-btn { flex: 1; justify-content: center; padding: 6px 4px; font-size: 11px; white-space: nowrap; }
+    .search-bar-inner { flex-basis: 100%; width: 100%; }
+    .search-shortcut { display: none; }
+    .subnav-filter-bar { flex-wrap: wrap; }
+    .category-filters-scroll { flex-basis: 100%; min-width: 0; }
+    .filter-divider-vertical { display: none; }
+}
 .header-platform-box h1, .platform-badge-glow, .search-submit-btn { white-space: nowrap; }
 .platform-badge-glow { max-width: 155px; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1450px) { .header-platform-box .platform-badge-glow { display: none; } }

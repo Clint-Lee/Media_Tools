@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         category: 'all',
         timeRange: 'all',
         searchQuery: '',
-        metricMode: 'single', // 播放量作品榜 / 官方话题榜，两种实体不能混用
+        metricMode: 'single', // 实时视频 / 官方话题 / 历史采集记录
         view: 'feed',         // 'feed' | 'globe'
         currentTopic: null,   // active topic in drilldown
 
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchClearBtn: document.getElementById('search-clear-btn'),
         btnMetricSingle: document.getElementById('btn-metric-single'),
         btnMetricTopic: document.getElementById('btn-metric-topic'),
+        btnMetricCollected: document.getElementById('btn-metric-collected'),
 
         // Views & Layout
         viewSwitchBtns: document.querySelectorAll('.view-switch-btn'),
@@ -600,6 +601,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return new URLSearchParams({ platform: state.platform, category: state.category, timeRange: state.timeRange, query: state.searchQuery });
     }
 
+    function feedEndpoint() {
+        return state.metricMode === 'topic' ? '/api/topics?' : state.metricMode === 'collected' ? '/api/collected-videos?'
+            : state.searchQuery ? '/api/search?' : '/api/trends?';
+    }
+
     async function fetchTopicVideosApi(topic) {
         const params = feedParams();
         params.set('query', topic.title);
@@ -625,6 +631,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (details) details.classList.toggle('hidden', !result.coverage);
         if (content && result.coverage) {
             const c = result.coverage;
+            if (mode === 'collected') {
+                const collectedTime = value => value ? new Date(value).toLocaleString('zh-CN') : '尚无记录';
+                content.textContent = `本机此平台保存 ${Number(c.candidates)} 件作品，当前筛选 ${Number(c.unique)} 件；其中有播放量 ${Number(c.knownViews)} 件、未公开 ${Number(c.unknownViews)} 件。首次采集 ${collectedTime(c.earliestCollectedAt)}，最近采集 ${collectedTime(c.latestCollectedAt)}。每平台最多保留 ${Number(c.capacity)} 件，超限淘汰最久未采集的记录；不是全站覆盖率。分类按采集时分区或标题标签匹配，时效按作品原始发布日期。${c.recoveredFromBackup ? '当前索引由上一份备份恢复，最近一批记录可能缺失。' : ''}`;
+                return;
+            }
             content.innerHTML = `<p>收到 ${Number(c.candidates || 0)} 条候选，${c.retainedCandidates?'另保留 '+Number(c.retainedCandidates)+' 条30分钟内真实采集缓存（未改写采集时间），':''}合并去重并筛选后 ${Number(c.unique || 0)} 条。${c.detailsVerified != null ? '首屏详情再次核验 ' + Number(c.detailsVerified) + ' 条，未能再次核验 ' + Number(c.detailsFailed || 0) + ' 条。' : ''}${result.hasMore ? '继续滚动可获取更多搜索页。' : '本批数据源已读取完毕。'}排名仅适用于已获取作品。</p>`
                 + (c.sources || []).map(source => `<div class="source-check ${source.status === 'failed' ? 'source-check-failed' : ''}">${source.status === 'failed' ? '失败' : '已读取'} · ${escapeHtml(source.name)} · ${Number(source.count || 0)} 条${source.message ? ' · ' + escapeHtml(source.message) : ''}</div>`).join('');
         }
@@ -662,15 +673,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = feedParams();
         params.set('refresh', forceRefresh ? '1' : '0');
         const mode = state.metricMode;
-        const endpoint = mode === 'topic' ? '/api/topics?' : state.searchQuery ? '/api/search?' : '/api/trends?';
+        const endpoint = feedEndpoint();
         try {
             const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
             if (sequence !== state.requestSequence) return;
             const list = result.list || [];
             const status = document.getElementById('source-status');
-            if (status) status.textContent = (result.stale?'真实采集快照 · ':'') + (result.sourceMessage || '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + ' · 采集 ' + new Date(result.fetchedAt || Date.now()).toLocaleString('zh-CN');
+            if (status) status.textContent = (result.historical ? '历史采集 · ' : result.stale?'真实采集快照 · ':'') + (result.sourceMessage || '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + (result.fetchedAt ? ' · 采集 ' + new Date(result.fetchedAt).toLocaleString('zh-CN') : '') + (result.collection?.status === 'write-failed' ? ' · ' + result.collection.message : '');
             showSourceCoverage(result, mode);
-            if (!list.length && !(mode==='single' && result.hasMore)) {
+            if (!list.length && !(mode!=='topic' && result.hasMore)) {
                 state.hasMore=false;
                 dom.emptyState.classList.remove('hidden');
                 dom.emptyState.querySelector('p').textContent = result.message || '当前筛选条件下没有可验证的数据，可扩大时效或切换分类。';
@@ -694,14 +705,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 dom.endHint.classList.toggle('hidden', state.hasMore);
             }
             if (state.view === 'globe') loadGeoHotspots(sequence);
-            document.getElementById('btn-load-more')?.classList.toggle('hidden',mode!=='single' || !state.hasMore);
-            if(mode==='single' && state.remoteHasMore && list.length<30)setTimeout(()=>{if(sequence===state.requestSequence)loadNextPage();},0);
+            document.getElementById('btn-load-more')?.classList.toggle('hidden',mode==='topic' || !state.hasMore);
+            if(mode!=='topic' && state.remoteHasMore && list.length<30)setTimeout(()=>{if(sequence===state.requestSequence)loadNextPage();},0);
             if(result.refreshing && state.refreshAttempts<15) state.feedRefreshTimer=setTimeout(()=>{if(sequence===state.requestSequence)loadData(false);},2000);
         } catch (error) {
             if (error.name === 'AbortError' || sequence !== state.requestSequence) return;
             dom.emptyState.classList.remove('hidden');
             dom.emptyState.querySelector('p').textContent = error.message;
-            document.getElementById('btn-empty-topics')?.classList.toggle('hidden', state.platform !== 'douyin' || mode === 'topic');
+            document.getElementById('btn-empty-topics')?.classList.toggle('hidden', state.platform !== 'douyin' || mode !== 'single');
             const status = document.getElementById('source-status');
             if (status) status.textContent = '数据源暂不可用';
             document.getElementById('ranking-scope').textContent = '未取得真实数据 · 不显示替代榜单';
@@ -791,6 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     ${video.likeRaw==null?'':`<div class="card-secondary-metric">${escapeHtml(video.likeDisplay || formatHeat(video.likeRaw))} 点赞 · 辅助指标，不用于排名</div>`}
+                    ${video.lastSeenAt ? `<div class="card-collected-at">历史采集 · ${escapeHtml(new Date(video.lastSeenAt).toLocaleString('zh-CN'))}</div>` : ''}
                 </div>
             `;
 
@@ -904,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Infinite Scroll Pagination ──────────────────────────────────
     function handleScrollPagination() {
-        if (state.metricMode !== 'single' || state.isLoading || !state.hasMore) return;
+        if (state.metricMode === 'topic' || state.isLoading || !state.hasMore) return;
 
         const { scrollTop, scrollHeight, clientHeight } = dom.gridScrollArea;
         // 提前 450px 预触发，实现无感平滑懒加载
@@ -926,7 +938,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const params = feedParams();
                 params.set('page', String(state.remotePage + 1));
                 if (state.nextCursor) params.set('cursor', state.nextCursor);
-                const endpoint = state.searchQuery ? '/api/search?' : '/api/trends?';
+                const endpoint = feedEndpoint();
                 const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
                 if (sequence !== state.requestSequence) return;
                 fetchedRemote = true;
@@ -938,7 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.allVideos = [...byId.values()].sort((a,b)=>(a.playRaw==null)-(b.playRaw==null) || Number(b.playRaw)-Number(a.playRaw) || b.pubdate-a.pubdate);
                 showSourceCoverage(result);
                 const status = document.getElementById('source-status');
-                if (status) status.textContent = (result.sourceMessage || '') + ` · 已读取 ${state.remotePage} 批 · 累计 ${state.allVideos.length} 个作品`;
+                if (status) status.textContent = (result.sourceMessage || '') + ` · 已读取 ${state.remotePage} 批 · 累计 ${state.allVideos.length} 个作品` + (result.collection?.status === 'write-failed' ? ' · ' + result.collection.message : '');
             }
             if (sequence !== state.requestSequence) return;
             state.page += 1;
@@ -2588,6 +2600,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Platform Navigation
         dom.navBtns.forEach(btn => {
+            const accessibleName = btn.querySelector('.nav-btn-name')?.textContent?.trim();
+            if (accessibleName) { btn.setAttribute('aria-label', accessibleName); btn.title = accessibleName; }
             btn.addEventListener('click', () => {
                 const plat = btn.dataset.platform;
                 if (!plat) return;
@@ -2625,6 +2639,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.metricMode = 'single';
             dom.btnMetricSingle.classList.add('active');
             dom.btnMetricTopic?.classList.remove('active');
+            dom.btnMetricCollected?.classList.remove('active');
             switchMainView('feed');
             loadData(true);
         });
@@ -2634,10 +2649,20 @@ document.addEventListener('DOMContentLoaded', () => {
             state.metricMode = 'topic';
             dom.btnMetricTopic.classList.add('active');
             dom.btnMetricSingle?.classList.remove('active');
+            dom.btnMetricCollected?.classList.remove('active');
             switchMainView('feed');
             loadData(true);
         });
         document.getElementById('btn-empty-topics')?.addEventListener('click', () => dom.btnMetricTopic?.click());
+        dom.btnMetricCollected?.addEventListener('click', () => {
+            if (state.metricMode === 'collected') return;
+            state.metricMode = 'collected';
+            dom.btnMetricCollected.classList.add('active');
+            dom.btnMetricSingle?.classList.remove('active');
+            dom.btnMetricTopic?.classList.remove('active');
+            switchMainView('feed');
+            loadData(true);
+        });
 
         // Back from Topic Drilldown
         dom.btnBackToTopics?.addEventListener('click', closeTopicDrilldown);

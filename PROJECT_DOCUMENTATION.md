@@ -1,5 +1,7 @@
 # 🍲 HotPot Aggregator & MediaTools 系统架构与全功能开发指南
 
+> 2026-10-16 增量：新增 `lib/collection-index.js` 和 `GET /api/collected-videos`，实时抓取成功后按平台保存最新实际观测与首次/最近采集时间。页面“已采集记录”提供历史样本筛选、覆盖统计与30条游标分页；索引原子写入/上一代备份恢复、每平台50,000件上限、写失败回滚。与实时30分钟快照分离，不代表全站穷举。验收和后续缺口见[根交接](HANDOFF.md)。
+
 > 2026-10-12 深度校准说明：本文已全面同步当前真实代码架构。过去固定素材补池、无密码演示账号、动态推断发布时间、根据标题捏造台词/分镜等历史原型方案已全面停用。最新实际能力边界、运行环境、多平台验证数据与接手注意事项请同步参阅 [docs/HANDOFF.md](docs/HANDOFF.md)、[docs/SYSTEM_AUDIT_2026-10-12.md](docs/SYSTEM_AUDIT_2026-10-12.md) 以及 [docs/RELIABILITY.md](docs/RELIABILITY.md)。
 
 > **文档定位**：本文档为本项目（HotPot 全网视频热点追踪聚合器与 MediaTools 多媒体智能工作台系统）的**完整架构规范、功能清单与真实代码定位指南**。供开发者或 AI 大模型秒级理解项目全貌、快速定位具体代码位置并进行精准维护与拓展。
@@ -224,6 +226,7 @@ HotPot/
 | :--- | :---: | :---: | :--- | :--- |
 | `/api/trends` | `GET` | 否 | `platform`, `category`, `timeRange`, `page` | 拉取各平台经过清洗、排序、去重后的热点视频流（首批30条） |
 | `/api/search` | `GET` | 否 | `platform`, `query`, `category`, `timeRange` | 多平台聚合关键词搜索 |
+| `/api/collected-videos` | `GET` | 否 | `platform`, `query`, `category`, `timeRange`, `cursor` | 本机已采集历史样本，原始观测指标，固定30件/页，版本改变返回409要求刷新 |
 | `/api/topics` | `GET` | 否 | `platform`, `category` | 获取各平台真实官方热搜话题排行榜列表 |
 | `/api/search-topic` | `GET` | 否 | `platform`, `query` | 获取指定热搜话题下的关联检索视频列表 |
 | `/api/geo-hotspots` | `GET` | 否 | `platform`, `category`, `timeRange` | 获取 3D 地球 30+ 城市的视频热力分布数据 |

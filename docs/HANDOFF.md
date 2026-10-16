@@ -1,4 +1,10 @@
-# HotPot 接手文档（2026-10-15 更新）
+# HotPot 接手文档（2026-10-16 更新）
+
+## 10月16日增量交接
+
+新增本机可恢复采集索引、独立历史查询与“已采集记录”入口，详见[根交接](../HANDOFF.md)首节。代码入口 `lib/collection-index.js`；采集挂载于 `lib/live-sources.js` 的视频采集成功分支，历史HTTP路由为 `/api/collected-videos`。原始采集时间和最新实际指标保留，固定30件分页，索引变化409提示刷新。平台限制与免登录要求继续适用。
+
+新增验收 `npm run test:collection-ui`（隔离浏览器）与 `npm run test:collection-live`（真实B站采集和重载对照），索引故障测试加入 `npm test`。索引是每平台最多50,000件的单进程JSON，保存于忽略于Git的 `.cache/collected-videos/`；备份只保留上一代，不能替代独立灾备。并未完成全站历史穷举、无人值守持续采集器、数据库事务或公开多租户部署。
 
 ## 当前交接：免登录模式优先
 

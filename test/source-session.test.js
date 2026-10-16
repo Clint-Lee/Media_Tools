@@ -4,6 +4,7 @@ const fs=require('fs'),os=require('os'),path=require('path');
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'hotpot-sources-'));
 process.env.HOTPOT_SESSION_DIR=path.join(directory,'sessions');
 process.env.HOTPOT_SOURCE_CACHE=path.join(directory,'snapshots');
+process.env.HOTPOT_COLLECTION_DIR=path.join(directory,'collection');
 delete process.env.DOUYIN_COOKIE; delete process.env.XIAOHONGSHU_COOKIE;
 const sessions=require('../lib/platform-session');
 const rankings=require('../lib/platform-rankings');
@@ -46,6 +47,7 @@ let sources=require('../lib/live-sources');
     rankings.youtubeApiVideos=async()=>{calls++;return {source:'isolated:fixture',message:'隔离缓存测试',list:prepareVideoList([{id:'abcdefghijk',title:'上海技术视频',platform:'youtube',playRaw:100,pubdate:Math.floor(Date.now()/1000),fetchedAt:Date.now()}])};};
     const options={platform:'youtube',category:'all',timeRange:'all',query:''};
     await sources.getVideos(options); assert.equal(calls,1);
+    assert.equal(require('../lib/collection-index').query(options).total,1,'真实采集结果自动进入可恢复索引');
     assert.equal(fs.readdirSync(process.env.HOTPOT_SOURCE_CACHE).length,1);
     const realNow=Date.now;
     try {
@@ -77,6 +79,14 @@ let sources=require('../lib/live-sources');
         Date.now=()=>realNow()+2100000;
         const expired=await sources.getVideos({...options,refresh:true});
         assert.equal(expired.list.length,1,'过期的真实样本也不能无限保留');
+        const collection=require('../lib/collection-index'), originalRecord=collection.record;
+        try {
+            collection.record=()=>{throw new Error('隔离磁盘写入失败');};
+            const unsaved=await sources.getVideos({...options,refresh:true});
+            assert.equal(unsaved.list.length,1,'历史索引故障不能丢掉本次成功的实时数据');
+            assert.equal(unsaved.collection.status,'write-failed');
+            assert.match(unsaved.collection.message,/写入失败/);
+        } finally {collection.record=originalRecord;}
     } finally { Date.now=realNow; }
     console.log('source/session tests passed (isolated fixtures, no platform credentials)');
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await sources.closeBrowser();fs.rmSync(directory,{recursive:true,force:true});});

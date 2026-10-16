@@ -652,7 +652,7 @@ async function handleLiveVideos(req, res) {
         return sendVideoList(res, result.list, options.timeRange, {
             source: result.source, sourceMessage: result.message, partial: result.partial || false,
             hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false, refreshing:result.refreshing || false,
-            fetchedAt: result.list[0]?.fetchedAt || Date.now()
+            fetchedAt: result.list[0]?.fetchedAt || Date.now(), collection: result.collection
         });
     } catch (error) {
         return res.status(502).json({ success: false, error: 'LIVE_SOURCE_UNAVAILABLE', list: [], message: error.message });
@@ -661,6 +661,14 @@ async function handleLiveVideos(req, res) {
 
 app.get('/api/trends', handleLiveVideos);
 app.get('/api/search', handleLiveVideos);
+app.get('/api/collected-videos', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    let options;
+    try { options = liveOptions(req); }
+    catch (error) { return res.status(400).json({ success: false, message: error.message }); }
+    try { return res.json(require('./lib/collection-index').query(options)); }
+    catch (error) { return res.status(error.status || 503).json({ success: false, list: [], message: error.message }); }
+});
 app.get('/api/topics', async (req, res) => {
     let options;
     try { options = liveOptions(req); }
