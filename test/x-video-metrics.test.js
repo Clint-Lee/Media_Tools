@@ -34,6 +34,13 @@ assert.equal(metricFromConfig({ video: { viewCount: 0 }, views: 123456 }, video)
     const failed = await unavailable.enrich([video], boundedMap);
     assert.equal(failed.list[0].playRaw, null); assert.equal(failed.failed, 1, '失败时保留真实作品与未知计数');
     const rounded = createClient({ http: { post: async () => ({ data: { guest_token: 'anonymous' } }), get: async () => ({ data: { track: { ...track, viewCount: '87.8K' } } }) } });
+    let missingCalls=0;
+    const missing=createClient({now:()=>clock,http:{post:async()=>({data:{guest_token:'anonymous'}}),get:async()=>{missingCalls++;return {data:{track:{...track,viewCount:null}}};}}});
+    const hidden=await missing.enrich([video],boundedMap);
+    assert.equal(hidden.failed,1,'HTTP200但未公开播放，仍必须计入不完整指标');
+    assert.equal(hidden.list[0].playRaw,null);assert.equal(hidden.errors,0);
+    clock+=31000;await missing.enrich([video],boundedMap);
+    assert.equal(missingCalls,2,'隐藏计数不能被正向缓存阻止过久，不改写未知为0');
     const display = (await rounded.enrich([video], boundedMap)).list[0];
     assert.equal(display.viewCountText, '87.8K'); assert.equal(display.viewPrecision, 'source-rounded');
     console.log('X anonymous video metrics: media identity, real counts, source rounding, token reuse and failures passed');

@@ -5254,6 +5254,7 @@ html, body {
 .platform-badge-glow { max-width: 155px; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1450px) { .header-platform-box .platform-badge-glow { display: none; } }
 .ranking-context > span { color: #cbd5e1; }
+.ranking-context select { color:var(--text-primary); background:#111827; border:1px solid var(--border); border-radius:5px; padding:5px; }
 .ranking-context summary { cursor: pointer; color: #7dd3fc; }
 .ranking-context details[open] { flex-basis: 100%; }
 #source-details-content { max-height: 230px; overflow: auto; margin-top: 8px; padding: 12px; border: 1px solid #293344; border-radius: 8px; background: #101620; }

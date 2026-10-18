@@ -13,8 +13,8 @@ sources.getVideos = async options => {
     calls.push(options);
     if (options.query === 'source-failure') throw new Error('真实源不可用');
     return { source: 'test:verified-fixture', message: '隔离测试数据', hasMore: true, nextCursor: 'real-next', scope: { exhaustive: false, metric: 'views' }, coverage: { candidates: 2, unique: 2 }, list: [
-        { id:'BVtest2', title:'上海技术视频', platform:'bilibili', playRaw:12345, metricRaw:12345, pubdate:now, cover:'https://example.com/real.jpg' },
-        { id:'BVtest1', title:'东京技术视频', platform:'bilibili', playRaw:12, metricRaw:12, pubdate:now }
+        { id:'BVtest2', title:'上海技术视频', platform:'bilibili', playRaw:12345, likeRaw:0, metricRaw:12345, pubdate:now, cover:'https://example.com/real.jpg' },
+        { id:'BVtest1', title:'东京技术视频', platform:'bilibili', playRaw:12, likeRaw:99, metricRaw:12, pubdate:now }
     ] };
 };
 sources.getTopics = async () => ({ source:'test:official-topic', message:'原始排名', list:[
@@ -53,6 +53,11 @@ const app = require('../server');
         assert.equal(r.data.list[0].playRaw, 12345);
         assert.equal(r.data.dataQuality.status,'ready');
         assert.equal(r.data.dataQuality.withViews,2);
+        const likes=await get('/api/trends?platform=bilibili&sort=likes');
+        assert.equal(likes.data.list[0].id,'BVtest1');assert.equal(likes.data.ranking.metric,'likes');
+        assert.equal(likes.data.ranking.ranked,2,'真实零点赞也有明确指标');
+        assert.equal(likes.data.dataQuality.rankingMetric,'likes');
+        assert.equal((await get('/api/trends?sort=invalid')).status,400);
         assert.equal(r.data.scope.exhaustive, false); assert.equal(r.data.nextCursor, 'real-next');
         assert.equal(r.data.hasMore, true); assert.equal(r.data.coverage.candidates, 2);
         await get('/api/search?platform=bilibili&query=AI&page=2&cursor=next');

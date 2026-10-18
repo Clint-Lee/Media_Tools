@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timeRange: 'all',
         searchQuery: '',
         metricMode: 'single', // 实时视频 / 官方话题 / 历史采集记录
+        sortBy:'views',
         view: 'feed',         // 'feed' | 'globe'
         currentTopic: null,   // active topic in drilldown
 
@@ -396,7 +397,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadOptionalScript(src) {
         if(!scriptLoads.has(src)) scriptLoads.set(src,new Promise((resolve,reject)=>{
             const script=document.createElement('script'); script.src=src;
-            script.onload=resolve; script.onerror=()=>{scriptLoads.delete(src);script.remove();reject(new Error('组件加载失败，请重试'));};
+            script.onload=()=>{if(src.includes('globe.gl') && typeof window.Globe!=='function')script.onerror();else resolve();};
+            script.onerror=()=>{
+                scriptLoads.delete(src);
+                script.remove();
+                if(src.includes('globe.gl')) {
+                    const fallback=document.createElement('script');
+                    fallback.src='https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js';
+                    fallback.onload=()=>{if(typeof window.Globe==='function')resolve();else fallback.onerror();};
+                    fallback.onerror=()=>{
+                        scriptLoads.delete(src);
+                        fallback.remove();
+                        reject(new Error('组件加载失败，请重试'));
+                    };
+                    document.head.appendChild(fallback);
+                } else {
+                    reject(new Error('组件加载失败，请重试'));
+                }
+            };
             document.head.appendChild(script);
         }));
         return scriptLoads.get(src);
@@ -437,6 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .pointAltitude(d => d.tier === 'high' ? 0.35 : (d.tier === 'medium' ? 0.22 : (d.tier === 'normal' ? 0.12 : 0.06)))
                     .pointRadius(d => d.radius || 0.35)
                     .pointResolution(12)
+                    .pointsTransitionDuration(0)
                     .pointLabel(d => `
                         <div style="background: rgba(14,18,28,0.96); border: 1px solid ${d.color || '#38bdf8'}; border-radius: 8px; padding: 8px 12px; color: #fff; font-family: Outfit, sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,0.6);">
                             <div style="font-weight: 700; font-size: 13px; color: ${d.color || '#38bdf8'};">${escapeHtml(d.city)} · ${escapeHtml(d.country)}</div>
@@ -447,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .onPointClick((point) => {
                         this.focusCity(point.lat, point.lng);
                     })
-                    .htmlLat('lat').htmlLng('lng').htmlAltitude(0.012)
+                    .htmlLat('lat').htmlLng('lng').htmlAltitude(0.000005)
                     .htmlElement(d=>{
                         const button=document.createElement('button'); button.className=d.kind==='country'?'geo-country-label':'geo-city-label'+(d.count?' has-samples':'');
                         button.textContent=d.city+(d.count?' · '+d.count:'');
@@ -481,6 +500,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     controls.autoRotate = false;
                     controls.enableDamping = true;
                     controls.dampingFactor = 0.08;
+                    // The old camera near plane stopped the map at regional detail.
+                    const camera=this.globe.camera(),radius=this.globe.getGlobeRadius();
+                    camera.near=0.05;
+                    camera.updateProjectionMatrix();
+                    controls.minDistance=radius*1.00002;
+                    controls.zoomSpeed=0.8;
                 }
 
                 // Debounced Resize Observer
@@ -491,14 +516,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 };
                 window.addEventListener('resize', this.resizeHandler);
+                this.resizeObserver=new ResizeObserver(this.resizeHandler);
+                this.resizeObserver.observe(containerEl);
 
                 this.isInitialized = true;
+                window.__testGlobe = this.globe;
+                this.resizeHandler();
                 this.updatePoints(this.hotspots);
                 this.loadCountries();
-                this.resizeHandler();
-                if(document.getElementById('geo-basemap')?.value==='streets')this.setBasemap('streets');
-                if(state.view!=='globe')this.globe.pauseAnimation();
+                this.setBasemap(document.getElementById('geo-basemap')?.value || 'satellite_hd');
+                if (state.view !== 'globe') this.globe.pauseAnimation();
             } catch (err) {
+                this.resizeObserver?.disconnect();
+                if(this.resizeHandler)window.removeEventListener('resize',this.resizeHandler);
+                this.globe?._destructor?.();this.globe=null;containerEl.replaceChildren();
                 console.error('[Globe] Initialization failed:', err);
                 showToast('地球组件未能初始化，右侧仍可查看实际城市统计：'+err.message,'error');
             } finally {
@@ -516,12 +547,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateLabels(force=false) {
             if(!this.globe)return;
-            const distance=this.globe.pointOfView().altitude>1.5?5:2;
-            if(!force && this.labelDistance===distance)return;
-            this.labelDistance=distance;
+            const altitude=Math.max(0.00002,this.globe.pointOfView().altitude);
+            const band=Math.floor(Math.log2(altitude));
+            if(force || this.detailBand!==band) {
+                this.detailBand=band;
+                // A tiny near plane at global scale causes severe country/surface z-fighting.
+                // Tighten it only near the ground; preserve the normal depth precision in overview.
+                const camera=this.globe.camera();
+                camera.near=Math.max(0.001,Math.min(0.05,altitude*this.globe.getGlobeRadius()*0.1));
+                camera.updateProjectionMatrix();
+                this.globe.pointRadius(d=>(d.radius || 0.35)*Math.min(1,Math.max(0.0002,altitude*0.4)))
+                    .pointAltitude(d=>(d.tier==='high'?0.35:d.tier==='medium'?0.22:d.tier==='normal'?0.12:0.06)*Math.min(1,altitude*0.6));
+            }
+            // Coarse country geometry must not float over close-up road tiles.
+            const countryVisible=altitude>=0.12 && document.getElementById('geo-countries')?.checked!==false;
+            if(force || this.countryVisible!==countryVisible) {
+                this.countryVisible=countryVisible;
+                this.globe.polygonsData(countryVisible?this.countries:[]);
+            }
+            const distance=altitude>1.5?5:altitude<0.12?0.5:2;
+            const labelKey=distance+':'+(altitude<0.005);
+            if(!force && this.labelDistance===labelKey)return;
+            this.labelDistance=labelKey;
             const byCity=new Map(this.hotspots.map(d=>[d.city,d]));
-            const countryLabels=document.getElementById('geo-countries')?.checked===false?[]:this.countries.filter(d=>Number(d.properties.LABELRANK)<= (distance===5?3:5)).map(d=>({kind:'country',city:this.countryName(d),lat:Number(d.properties.LABEL_Y),lng:Number(d.properties.LABEL_X)})).filter(d=>Number.isFinite(d.lat) && Number.isFinite(d.lng));
-            const rows=[...this.hotspots,...this.cityCatalog.filter(d=>!byCity.has(d.city)),...countryLabels];
+            const countryLabels=altitude<0.12 || document.getElementById('geo-countries')?.checked===false?[]:this.countries.filter(d=>Number(d.properties.LABELRANK)<= (distance===5?3:5)).map(d=>({kind:'country',city:this.countryName(d),lat:Number(d.properties.LABEL_Y),lng:Number(d.properties.LABEL_X)})).filter(d=>Number.isFinite(d.lat) && Number.isFinite(d.lng));
+            const rows=[...this.hotspots,...(altitude<0.005?[]:this.cityCatalog.filter(d=>!byCity.has(d.city))),...countryLabels];
             const kept=[];
             for(const row of rows) if(!kept.some(d=>Math.abs(d.lat-row.lat)<distance && Math.abs(d.lng-row.lng)<distance && d.kind===row.kind))kept.push(row);
             this.globe.htmlElementsData(kept);
@@ -549,36 +599,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updateCountries() {
             if(!this.globe)return;
-            this.globe.polygonsData(document.getElementById('geo-countries')?.checked===false?[]:this.countries);
             this.updateLabels(true);
         }
 
         async setBasemap(mode) {
             if(!this.globe)return;
             const status=document.getElementById('geo-map-status'), attribution=document.getElementById('geo-attribution');
-            if(mode==='streets') {
-                status.textContent='正在连接街道瓦片…';
-                const okay=await new Promise(resolve=>{
-                    const image=new Image(),timer=setTimeout(()=>resolve(false),5000);
-                    image.crossOrigin='anonymous'; image.onload=()=>{clearTimeout(timer);resolve(true);};image.onerror=()=>{clearTimeout(timer);resolve(false);};
-                    image.src='https://tile.openstreetmap.org/0/0/0.png';
-                });
-                if(document.getElementById('geo-basemap').value!=='streets')return;
-                if(!okay) { document.getElementById('geo-basemap').value='satellite';status.textContent='街道瓦片连接失败，保留卫星底图与本地城市名称';return; }
-                this.globe.globeTileEngineMaxLevel(8).globeTileEngineUrl((x,y,z)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
-                attribution.classList.remove('hidden'); status.textContent='街道地图 · 按视角加载瓦片 · 放大可见道路与更多地名';
-            } else {
-                this.globe.globeTileEngineUrl(null); attribution.classList.add('hidden');
-                status.textContent='卫星底图 + 城市名 · 彩色点为实际视频数量，白字为地理参考';
-            }
+            if(!status) return;
+            const sequence=this.mapSequence=(this.mapSequence || 0)+1;
+            const source=mode==='satellite_hd'?{name:'遥感影像',url:(x,y,z)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,credit:'<a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">影像：Esri及数据提供方 · 来源与使用条款</a>'}
+                :mode==='streets'?{name:'街道地图',url:(x,y,z)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`,credit:'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>'}:null;
+            this.globe.globeTileEngineUrl(null);
+            attribution?.classList.add('hidden');
+            if(!source){this.limitLocalZoom();status.textContent='本地静态卫星概览 · 不依赖外部瓦片 · 细节请手动切换街道或遥感';return;}
+            status.textContent='正在检测'+source.name+'… 连接期间保留本地底图';
+            const fail=()=>{
+                if(sequence!==this.mapSequence)return;
+                this.mapSequence++;
+                this.globe.globeTileEngineUrl(null);
+                this.limitLocalZoom();
+                document.getElementById('geo-basemap').value='satellite';
+                attribution?.classList.add('hidden');
+                status.textContent=source.name+'瓦片连接失败，已回退本地卫星概览；可重新选择重试';
+            };
+            const probe=async url=>{
+                try {
+                    const response=await fetch(url,{mode:'cors',signal:AbortSignal.timeout(5000)});
+                    if(!response.ok || !/^image\//i.test(response.headers.get('content-type') || '')){await response.body?.cancel();return false;}
+                    return (await response.blob()).size>0;
+                } catch {return false;}
+            };
+            const pov=this.globe.pointOfView(),z=Math.min(19,Math.max(0,Math.ceil(Math.log2(8/Math.max(0.00002,pov.altitude))))),n=2**z;
+            const lat=Math.max(-85.051128,Math.min(85.051128,pov.lat))*Math.PI/180;
+            const x=Math.max(0,Math.min(n-1,Math.floor((pov.lng+180)/360*n))),y=Math.max(0,Math.min(n-1,Math.floor((1-Math.asinh(Math.tan(lat))/Math.PI)/2*n)));
+            if(!await probe(source.url(x,y,z))){fail();return;}
+            if(sequence!==this.mapSequence)return;
+            this.globe.controls().minDistance=this.globe.getGlobeRadius()*1.00002;
+            if(attribution){attribution.innerHTML=source.credit;attribution.classList.remove('hidden');}
+            let checkedLevel=z;
+            this.globe.globeTileEngineMaxLevel(19).globeTileEngineUrl((tx,ty,tz)=>{
+                const url=source.url(tx,ty,tz);
+                // Check one tile already requested by the viewport, not a prefetch of unseen areas.
+                if(tz!==checkedLevel){checkedLevel=tz;probe(url).then(okay=>{if(!okay)fail();});}
+                return url;
+            });
+            status.textContent=source.name+' · 最高19级（实际清晰度依数据覆盖） · 仅当前视角按需加载';
         }
 
         focusCity(lat, lng) {
             if (!this.globe) return;
-            this.globe.pointOfView({ lat, lng, altitude: 1.2 }, 1000);
+            const basemap = document.getElementById('geo-basemap')?.value || 'satellite_hd';
+            const isTileMap = ['satellite_hd', 'streets_hd', 'dark_matter', 'streets'].includes(basemap);
+            this.globe.pointOfView({ lat, lng, altitude: isTileMap ? 0.012 : 1.2 }, 1000);
+        }
+
+        limitLocalZoom() {
+            this.globe.controls().minDistance=this.globe.getGlobeRadius()*1.4;
+            const pov=this.globe.pointOfView();
+            if(pov.altitude<0.4)this.globe.pointOfView({...pov,altitude:0.6},400);
+        }
+
+        zoom(factor) {
+            if(!this.globe)return;
+            const pov=this.globe.pointOfView();
+            const min=document.getElementById('geo-basemap')?.value==='satellite'?0.4:0.00002;
+            this.globe.pointOfView({...pov,altitude:Math.max(min,Math.min(4,pov.altitude*factor))},300);
+        }
+
+        resetView() {
+            this.globe?.pointOfView({lat:31.2,lng:115.5,altitude:2.1},600);
         }
 
         destroy() {
+            this.mapSequence=(this.mapSequence || 0)+1;
+            this.resizeObserver?.disconnect();
             if (this.resizeHandler) {
                 window.removeEventListener('resize', this.resizeHandler);
             }
@@ -598,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function feedParams() {
-        return new URLSearchParams({ platform: state.platform, category: state.category, timeRange: state.timeRange, query: state.searchQuery });
+        return new URLSearchParams({ platform: state.platform, category: state.category, timeRange: state.timeRange, query: state.searchQuery, sort:state.sortBy, final: '1' });
     }
 
     function feedEndpoint() {
@@ -608,11 +702,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showVideoQuality(quality) {
         if (!quality) return;
-        const label = quality.status === 'empty' ? '本次筛选无视频' : quality.status === 'metadata-only' ? '视频可见 · 播放量未取得'
-            : quality.status === 'cached' ? '历史快照 · 非实时' : quality.withoutViews ? '部分作品有真实播放量' : '真实视频与播放量';
+        const isLikesPlatform = state.sortBy==='likes';
+        const label = quality.status === 'empty' ? '本次筛选无视频'
+            : isLikesPlatform ? (quality.withLikes?'公开点赞榜 · 非播放榜':'视频可见 · 点赞未取得')
+            : !quality.withViews ? '视频可见 · 播放量未取得'
+            : quality.status === 'cached' ? '历史快照 · 非实时'
+            : quality.withoutViews ? '部分作品有真实播放量' : '真实视频与播放量';
         if (dom.platformStatusBadge) dom.platformStatusBadge.textContent = label;
         const subtitle = document.querySelector('.nav-btn[data-platform="' + state.platform + '"] .nav-btn-sub');
-        if (subtitle) subtitle.textContent = `${quality.videos}件视频 · ${quality.withViews}件有播放量`;
+        if (subtitle) {
+            subtitle.textContent = isLikesPlatform
+                ? `${quality.videos}件视频 · ${quality.withLikes || 0}件有真实点赞`
+                : `${quality.videos}件视频 · ${quality.withViews}件有播放量`;
+        }
     }
 
     async function fetchTopicVideosApi(topic) {
@@ -629,11 +731,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function showSourceCoverage(result, mode = state.metricMode) {
         const scope = document.getElementById('ranking-scope');
         if (scope) {
-            const sortLabel = '按真实播放量降序';
+            const hasOnlyLikes = state.sortBy==='likes';
+            const sortLabel = hasOnlyLikes ? '按公开点赞降序（不是播放榜）' : '按真实播放量降序';
             const label = result.scope?.label || '已获取作品';
-            const sortPart = label.includes(sortLabel) || label.includes('降序') ? '' : ' · ' + sortLabel;
+            const sortPart = ' · ' + sortLabel;
+            const shown=state.allVideos.length?state.allVideos:(result.list || []),summary=VideoRanking.summary(shown,state.sortBy);
+            const prefix=hasOnlyLikes?'like':'view',rounded=shown.filter(v=>v[prefix+'Precision']==='source-rounded').length,bounded=shown.filter(v=>v[prefix+'Precision']==='lower-bound').length;
             scope.textContent = mode === 'topic' ? '平台官方实时话题排名 · 不是视频播放榜 · 发布时效用于关联视频'
-                : label + sortPart + ' · 未公开播放量不参与名次 · 不代表全站历史总榜';
+                : label + sortPart + ' · '+summary.ranked+'/'+shown.length+'件可排名' + (rounded?' · '+rounded+'件为平台缩写，排序近似':'') + (bounded?' · '+bounded+'件仅公开下界，不排名':'') + (hasOnlyLikes ? ' · 未取得点赞不参与名次' : ' · 未取得播放量不参与名次') + ' · 仅已采集样本，非全站历史总榜';
         }
         const details = document.getElementById('source-details');
         const content = document.getElementById('source-details-content');
@@ -651,22 +756,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadData(reset = true, forceRefresh = false) {
-        clearTimeout(state.feedRefreshTimer);
+        if(!reset && state.isLoading) return;
+        document.getElementById('ranking-metric').disabled=state.metricMode==='topic';
         state.refreshAttempts=reset?0:(state.refreshAttempts || 0)+1;
         const visibleCount=reset?30:Math.max(30,state.displayedVideos.length);
         const sequence = ++state.requestSequence;
         state.feedAbort?.abort();
         state.feedAbort = new AbortController();
         state.isLoading = true;
-        state.page = 1;
-        state.remotePage = 1;
-        state.remoteHasMore = false;
-        state.nextCursor = '';
-        state.hasMore = true;
-        state.allVideos = [];
-        state.displayedVideos = [];
-        state.topicsList = [];
-        state.currentTopic = null;
+        if(reset) {
+            state.feedRefreshing=false;
+            state.page = 1;
+            state.remotePage = 1;
+            state.remoteHasMore = false;
+            state.nextCursor = '';
+            state.hasMore = true;
+            state.allVideos = [];
+            state.displayedVideos = [];
+            state.topicsList = [];
+            state.currentTopic = null;
+        }
         if(reset) { state.geoHotspots = []; globeRadar.updatePoints([]); }
         dom.loader.classList.toggle('hidden',!reset);
         dom.emptyState.classList.add('hidden');
@@ -678,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.infiniteLoader.classList.add('hidden');
         document.getElementById('btn-load-more')?.classList.add('hidden');
         document.getElementById('ranking-scope').textContent = '正在核验当前筛选的数据来源…';
-        document.getElementById('source-details').classList.add('hidden');
+        if(reset)document.getElementById('source-details').classList.add('hidden');
         const params = feedParams();
         params.set('refresh', forceRefresh ? '1' : '0');
         const mode = state.metricMode;
@@ -686,7 +795,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await readApi(endpoint + params, { signal: state.feedAbort.signal });
             if (sequence !== state.requestSequence) return;
-            const list = result.list || [];
+            let list = result.list || [];
+            state.feedRefreshing=Boolean(result.refreshing);
+            if(!reset && state.remotePage>1 && mode!=='topic') {
+                // Updating the first batch must not discard pages already loaded by scrolling.
+                const byId=new Map(state.allVideos.map(v=>[v.normPlatform+':'+v.id,v]));
+                for(const video of list)byId.set(video.normPlatform+':'+video.id,video);
+                list=[...byId.values()].sort((a,b)=>VideoRanking.compare(a,b,state.sortBy));
+            }
             if (mode === 'single') showVideoQuality(result.dataQuality);
             const status = document.getElementById('source-status');
             if (status) status.textContent = (result.historical ? '历史采集 · ' : result.stale?'真实采集快照 · ':'') + (result.sourceMessage || '') + (result.dataQuality ? ` · 当前${result.dataQuality.videos}件视频，${result.dataQuality.withViews}件有真实播放量，${result.dataQuality.withoutViews}件未取得播放量` : '') + (result.partial ? '（部分接口暂不可用，仅显示已验证样本）' : '') + (result.fetchedAt ? ' · 采集 ' + new Date(result.fetchedAt).toLocaleString('zh-CN') : '') + (result.collection?.status === 'write-failed' ? ' · ' + result.collection.message : '');
@@ -704,20 +820,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 dom.endHint.classList.remove('hidden');
             } else {
                 state.allVideos = list;
-                state.remoteHasMore = Boolean(result.hasMore);
-                state.nextCursor = result.nextCursor || '';
+                if(reset || state.remotePage===1) {
+                    state.remoteHasMore = Boolean(result.hasMore);
+                    state.nextCursor = result.nextCursor || '';
+                }
                 state.pageSize = getResponsivePageSize();
-                state.page = 1;
-                state.displayedVideos = list.slice(0, visibleCount);
-                renderVideoCards(state.displayedVideos, dom.cardsGrid);
+                const displayed=list.slice(0, visibleCount);
+                if(reset || JSON.stringify(displayed)!==JSON.stringify(state.displayedVideos))renderVideoCards(displayed, dom.cardsGrid);
+                state.displayedVideos = displayed;
                 dom.cardsGrid.classList.remove('hidden');
                 state.hasMore = list.length > state.displayedVideos.length || state.remoteHasMore;
-                dom.endHint.classList.toggle('hidden', state.hasMore);
+                dom.endHint.classList.toggle('hidden', state.hasMore || state.feedRefreshing);
             }
             if (state.view === 'globe') loadGeoHotspots(sequence);
             document.getElementById('btn-load-more')?.classList.toggle('hidden',mode==='topic' || !state.hasMore);
-            if(mode!=='topic' && state.remoteHasMore && list.length<30)setTimeout(()=>{if(sequence===state.requestSequence)loadNextPage();},0);
-            if(result.refreshing && state.refreshAttempts<15) state.feedRefreshTimer=setTimeout(()=>{if(sequence===state.requestSequence)loadData(false);},2000);
         } catch (error) {
             if (error.name === 'AbortError' || sequence !== state.requestSequence) return;
             dom.emptyState.classList.remove('hidden');
@@ -767,29 +883,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+    function metricText(video,kind) {
+        const prefix={views:'view',likes:'like',comments:'comment',shares:'share',collects:'collect'}[kind];
+        const value=video[{views:'playRaw',likes:'likeRaw',comments:'commentCount',shares:'shareCount',collects:'collectCount'}[kind]];
+        const original=video[prefix+'CountText'] || '',text=/^no views$/i.test(original)?'0':original.replace(/\s*(?:views?|likes?|comments?|shares?|次播放|次观看|播放|观看|点赞|评论|分享|收藏|赞)$/i,'');
+        if(video[prefix+'Precision']==='lower-bound')return (text || video[prefix+'LowerBound']+'+')+'（仅下界）';
+        if(value==null)return '未取得';
+        return (video[prefix+'Precision']==='source-rounded'?'约 ':'')+(text || formatHeat(value));
+    }
+
     function renderVideoCards(videos, containerEl, append = false, rankOffset = 0) {
-        if (!append) containerEl.innerHTML = '';
+        const existing=new Map([...containerEl.querySelectorAll('.video-card')].map(card=>[card.dataset.videoKey,card]));
         const fragment = document.createDocumentFragment();
 
         videos.forEach((video, index) => {
-            const card = document.createElement('div');
-            card.className = 'video-card';
-            card.dataset.videoId = video.id;
-
             const rank = rankOffset + index + 1;
             const rankClass = rank === 1 ? 'top-1' : (rank === 2 ? 'top-2' : (rank === 3 ? 'top-3' : ''));
             const rankIcon = rank === 1 ? '👑 #1' : (rank === 2 ? '🥈 #2' : (rank === 3 ? '🥉 #3' : `#${rank}`));
 
-            const displayViews = video.playRaw == null ? '未公开' : (video.viewPrecision === 'source-rounded' ? '约 ' : '') + (video.viewCountText || video.playCount);
-            const metricLabel = '播放';
+            const hasPlay = video.playRaw != null;
+            const hasLikes = video.likeRaw != null;
+            const ranked = VideoRanking.count(video,state.sortBy)!==null;
+            const key=(video.normPlatform || video.platform || state.platform)+':'+video.id;
+            const signature=JSON.stringify([state.sortBy,video]);
+            const previous=existing.get(key);
+            if(previous?.dataset.renderSignature===signature) {
+                const badge=previous.querySelector('.card-rank');
+                badge.textContent=ranked?rankIcon:(video[(state.sortBy==='likes'?'like':'view')+'Precision']==='lower-bound'?'仅下界 · 未排名':state.sortBy==='likes'?'未入点赞榜':'未入播放榜');
+                badge.className='card-rank '+(ranked?rankClass:'');
+                fragment.appendChild(previous);return;
+            }
+            const card=document.createElement('div');card.className='video-card';
+            card.dataset.videoId=video.id;card.dataset.videoKey=key;card.dataset.renderSignature=signature;
+
+            let metricType = 'unknown';
+            let metricLabel = '未公开';
+            let metricIcon = 'fa-circle-question';
+            let displayMetric = '未公开';
+            let statTooltip = '';
+            let secondaryMetricHtml = '';
+
+            if (state.sortBy!=='likes' && hasPlay) {
+                metricType = 'views';
+                metricLabel = '播放';
+                metricIcon = 'fa-play';
+                displayMetric = metricText(video,'views');
+                statTooltip = (video.viewPrecision === 'source-rounded' ? '约 ' : '') + Number(video.playRaw).toLocaleString('zh-CN') + ' 真实播放'
+                    + (video.viewPrecision==='unverified'?'（原始精度待核验）':'')
+                    + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.viewSource || video.source || '平台公开数据')
+                    + ((video.viewsFetchedAt || video.fetchedAt) ? ' · 观测 ' + new Date(video.viewsFetchedAt || video.fetchedAt).toLocaleString('zh-CN') : '');
+                if (video.likeRaw != null || video.likeLowerBound!=null) {
+                    secondaryMetricHtml = `<div class="card-secondary-metric"><i class="fa-regular fa-heart"></i> ${escapeHtml(metricText(video,'likes'))} 点赞 · 辅助参考</div>`;
+                }
+            } else if (state.sortBy==='likes' && hasLikes) {
+                metricType = 'likes';
+                metricLabel = '点赞';
+                metricIcon = 'fa-heart';
+                displayMetric = metricText(video,'likes');
+                statTooltip = displayMetric + ' 公开点赞 · 当前为点赞榜，不是播放榜'
+                    + ' · ' + (video.likeSource || video.source || '平台公开数据')
+                    + ((video.likesFetchedAt || video.fetchedAt) ? ' · 观测 ' + new Date(video.likesFetchedAt || video.fetchedAt).toLocaleString('zh-CN') : '');
+                secondaryMetricHtml = `<div class="card-secondary-metric">${hasPlay?escapeHtml(metricText(video,'views'))+' 播放':'播放量未取得'} · 点赞不等于播放量</div>`;
+            } else {
+                metricLabel=state.sortBy==='likes'?'点赞':'播放';
+                displayMetric=metricText(video,state.sortBy);
+                statTooltip = '本次数据未提供当前排行指标，不参与名次';
+                if((hasLikes || video.likeLowerBound!=null) && state.sortBy==='views')secondaryMetricHtml=`<div class="card-secondary-metric">${escapeHtml(metricText(video,'likes'))} 点赞 · 辅助指标，不用于播放排名</div>`;
+            }
+
+            const rankBadgeTitle = state.sortBy==='views' && hasPlay
+                ? '当前已获取作品内真实播放量排名'
+                : (state.sortBy==='likes' && hasLikes ? '当前已获取作品内公开点赞排名' : '缺少当前指标，未参与排名');
+            const rankBadgeText = ranked ? rankIcon : video[(state.sortBy==='likes'?'like':'view')+'Precision']==='lower-bound'?'仅下界 · 未排名':state.sortBy==='likes'?'未入点赞榜':'未入播放榜';
             const coverUrl = getSafeCoverUrl(video);
-            const ranked=video.playRaw != null;
-            const statTooltip = (ranked ? (video.viewPrecision === 'source-rounded' ? '约 ' : '')+Number(video.playRaw).toLocaleString('zh-CN')+' 播放' : '原始数据未提供可验证播放量，不以点赞或话题热度推算，不参与播放名次') + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.source || '平台公开数据') + (video.fetchedAt?' · '+(video.isCached?'此前真实采集 ':'采集 ')+new Date(video.fetchedAt).toLocaleString('zh-CN'):'') + (video.viewSource ? ' · 播放来源 '+video.viewSource+' · '+new Date(video.viewsFetchedAt).toLocaleString('zh-CN') : '');
 
             card.innerHTML = `
                 <div class="card-thumbnail-wrapper">
                     <img class="card-thumbnail" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(video.title)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/cover-placeholder.svg'">
-                    <span class="card-rank ${ranked?rankClass:''}" title="${ranked?'当前已获取作品内播放排名':'缺少真实播放量，未参与排名'}">${ranked?rankIcon:'未入播放榜'}</span>
+                    <span class="card-rank ${ranked?rankClass:''}" title="${escapeHtml(rankBadgeTitle)}">${rankBadgeText}</span>
                     <span class="card-duration">${escapeHtml(video.duration || 'Shorts')}</span>
                     <div class="card-play-btn">
                         <div class="card-play-btn-inner"><i class="fa-solid fa-play"></i></div>
@@ -807,13 +978,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i class="fa-solid fa-circle-user"></i> ${escapeHtml(video.author || '达人')}
                         </span>
                         <div class="card-stats" title="${escapeHtml(statTooltip)}">
-                            <i class="fa-regular fa-eye"></i>
-                            <span>${escapeHtml(displayViews)} ${escapeHtml(metricLabel)}</span>
+                            <i class="fa-solid ${metricIcon}" ${metricType === 'likes' ? 'style="color:#ff2442;"' : ''}></i>
+                            <span>${escapeHtml(displayMetric)} ${escapeHtml(metricLabel)}</span>
                         </div>
                     </div>
-                    ${video.likeRaw==null?'':`<div class="card-secondary-metric">${escapeHtml(video.likeDisplay || formatHeat(video.likeRaw))} 点赞 · 辅助指标，不用于排名</div>`}
+                    ${secondaryMetricHtml}
+                    ${[['comments','评论','commentCount','comment'],['collects','收藏','collectCount','collect'],['shares','分享','shareCount','share']].some(([, ,key,prefix])=>video[key]!=null || video[prefix+'LowerBound']!=null)?'<div class="card-secondary-metric">'+[['comments','评论','commentCount','comment'],['collects','收藏','collectCount','collect'],['shares','分享','shareCount','share']].filter(([, ,key,prefix])=>video[key]!=null || video[prefix+'LowerBound']!=null).map(([kind,label])=>escapeHtml(metricText(video,kind))+' '+label).join(' · ')+'</div>':''}
                     ${video.lastSeenAt ? `<div class="card-collected-at">历史采集 · ${escapeHtml(new Date(video.lastSeenAt).toLocaleString('zh-CN'))}</div>` : ''}
                     ${video.viewPrecision === 'source-rounded' ? '<div class="card-collected-at">播放量为平台公开缩写，非精确整数</div>' : ''}
+                    ${video.likePrecision === 'source-rounded' ? '<div class="card-collected-at">点赞为平台公开缩写，非精确整数</div>' : ''}
+                    ${video.viewPrecision==='unverified' || video.likePrecision==='unverified'?'<div class="card-collected-at">旧记录未保留原始精度，待重新采集核验</div>':''}
                 </div>
             `;
 
@@ -824,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fragment.appendChild(card);
         });
 
-        containerEl.appendChild(fragment);
+        if(append)containerEl.appendChild(fragment);else containerEl.replaceChildren(fragment);
     }
 
     // ── Metric Mode 2: Topic Event Leaderboard ──────────────────────
@@ -959,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.nextCursor = result.nextCursor || '';
                 const byId = new Map(state.allVideos.map(video => [video.normPlatform + ':' + video.id, video]));
                 for (const video of result.list || []) byId.set(video.normPlatform + ':' + video.id, video);
-                state.allVideos = [...byId.values()].sort((a,b)=>(a.playRaw==null)-(b.playRaw==null) || Number(b.playRaw)-Number(a.playRaw) || b.pubdate-a.pubdate);
+                state.allVideos = [...byId.values()].sort((a,b)=>VideoRanking.compare(a,b,state.sortBy));
                 showSourceCoverage(result);
                 const status = document.getElementById('source-status');
                 if (status) status.textContent = (result.sourceMessage || '') + ` · 已读取 ${state.remotePage} 批 · 累计 ${state.allVideos.length} 个作品` + (result.collection?.status === 'write-failed' ? ' · ' + result.collection.message : '');
@@ -968,10 +1142,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.page += 1;
             const batchSize = getResponsivePageSize();
             state.displayedVideos = state.allVideos.slice(0, currentLength + batchSize);
-            if (fetchedRemote) renderVideoCards(state.displayedVideos, dom.cardsGrid);
-            else renderVideoCards(state.displayedVideos.slice(currentLength), dom.cardsGrid, true, currentLength);
+            renderVideoCards(state.displayedVideos,dom.cardsGrid);
             state.hasMore = state.displayedVideos.length < state.allVideos.length || state.remoteHasMore;
-            dom.endHint.classList.toggle('hidden', state.hasMore);
+            dom.endHint.classList.toggle('hidden', state.hasMore || state.feedRefreshing);
             document.getElementById('btn-load-more')?.classList.toggle('hidden',!state.hasMore);
             dom.emptyState.classList.toggle('hidden',state.displayedVideos.length>0);
             if(!state.displayedVideos.length)dom.emptyState.querySelector('p').textContent='当前公开样本批次没有匹配视频。'+(state.remoteHasMore?'仍有后续样本，可点击继续加载；这不是全站检索结果。':'已读取的公开样本已结束，不代表全平台没有相关视频。');
@@ -1055,7 +1228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.modalPlatformBadge.textContent = video.platform || state.platform.toUpperCase();
         dom.modalVideoTitle.textContent = video.title || '视频播放';
         dom.modalVideoAuthor.innerHTML = `<i class="fa-regular fa-user"></i> ${escapeHtml(video.author || '达人')}`;
-        dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(video.playRaw==null?'播放量未公开 · 不参与排名':video.playCount+' 播放')}${video.likeRaw==null?'':' · '+escapeHtml(video.likeDisplay || formatHeat(video.likeRaw))+' 点赞'}`;
+        dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(metricText(video,'views'))} 播放${video.likeRaw==null && video.likeLowerBound==null?'':' · '+escapeHtml(metricText(video,'likes'))+' 点赞'}`;
 
         // Direct Original Platform Link in New Tab
         dom.modalOpenOriginBtn.href = video.url || '#';
@@ -2950,6 +3123,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btn-load-more')?.addEventListener('click',()=>loadNextPage());
         document.getElementById('geo-scope')?.addEventListener('change',()=>loadGeoHotspots());
         document.getElementById('geo-refresh')?.addEventListener('click',()=>loadGeoHotspots());
+        document.getElementById('ranking-metric')?.addEventListener('change',event=>{state.sortBy=VideoRanking.metric(event.target.value);loadData();});
+        document.getElementById('geo-zoom-in')?.addEventListener('click',()=>globeRadar.zoom(0.5));
+        document.getElementById('geo-zoom-out')?.addEventListener('click',()=>globeRadar.zoom(2));
+        document.getElementById('geo-reset-view')?.addEventListener('click',()=>globeRadar.resetView());
         document.getElementById('geo-basemap')?.addEventListener('change',event=>globeRadar.setBasemap(event.target.value));
         document.getElementById('geo-countries')?.addEventListener('change',()=>globeRadar.updateCountries());
         for(const id of ['system-status-modal','account-edit-modal','platform-connect-modal']) {

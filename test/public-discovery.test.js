@@ -17,6 +17,13 @@ const noteId='a'.repeat(24),noteUrl='https://www.xiaohongshu.com/explore/'+noteI
 const html='<script>window.__INITIAL_STATE__={"note":{"noteDetailMap":{"'+noteId+'":{"note":{"noteId":"'+noteId+'","title":"undefined 不应改写","time":1700000000000,"missing":undefined}}}}};</script>';
 assert.equal(parseState(html,noteUrl).title,'undefined 不应改写');
 assert.equal(parseState(html,noteUrl).missing,null);
+const feedHtml='<script>window.__INITIAL_STATE__='+JSON.stringify({feed:{feeds:[{id:noteId,xsecToken:'anonymous-technical-fixture',noteCard:{type:'video',displayTitle:'服务端真实视频结构',user:{nickName:'作者'},cover:{urlDefault:'https://example.com/cover.jpg'},interactInfo:{likedCount:'1.2万'}}}],placeholderFeeds:[{id:'b'.repeat(24),noteCard:{type:'video',displayTitle:'不可用的占位池'}}]},note:{noteDetailMap:{}}})+';</script>';
+const ssr=require('../lib/public-discovery').redFeedFromHtml(feedHtml);
+assert.equal(ssr.length,1,'只读实际feed，不能使用占位池或其它store凑数');
+assert.equal(ssr[0].title,'服务端真实视频结构');
+assert.equal(ssr[0].author,'作者');
+assert.equal(ssr[0].metricRaw,12000);assert.equal(ssr[0].playRaw,null);
+assert.equal(new URL(ssr[0].url).searchParams.get('xsec_token'),'anonymous-technical-fixture');
 assert.throws(()=>parseState(html,'https://www.xiaohongshu.com/explore/'+'b'.repeat(24)),/一致/);
 const ksUrl='https://www.kuaishou.com/short-video/real-id';
 assert.throws(()=>metadataFromDetail({photo:{id:'wrong',photoUrl:'https://v1.kwaicdn.com/video.mp4'}},ksUrl),/不一致/);

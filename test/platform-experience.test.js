@@ -83,7 +83,7 @@ const puppeteer=require('puppeteer');
         });
         await mock.goto(base,{waitUntil:'domcontentloaded'});await mock.waitForSelector('#cards-grid .video-card');
         assert.equal(await mock.$eval('[data-video-id="no-play"] .card-rank',el=>el.textContent),'未入播放榜');
-        assert.ok((await mock.$eval('[data-video-id="no-play"] .card-stats',el=>el.textContent)).includes('未公开 播放'));
+        assert.ok((await mock.$eval('[data-video-id="no-play"] .card-stats',el=>el.textContent)).includes('未取得 播放'));
         assert.ok((await mock.$eval('[data-video-id="no-play"] .card-secondary-metric',el=>el.textContent)).includes('不用于排名'));
         assert.deepEqual(errors,[]);
         const report={checkedAt:new Date().toISOString(),firstCardsMs,initialCards:30,globeLoadedOnDemand:true,cityCount:cities,labels,basemap,countryFeatures,backfaceOcclusion:true,countryLayerToggle:true,errors};

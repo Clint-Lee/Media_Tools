@@ -1,6 +1,82 @@
-# HotPot 当前交接与未完成项（2026-10-16）
+# HotPot 当前交接与未完成项（2026-10-18 更新）
 
-## 最新停止点：平台真实播放数据（优先于下文旧状态）
+## 2026-10-18 最新接续与修复进展（优先于以下历史说明）
+
+1. **YouTube 匿名原站详情指标补充（免 Key 精确播放与点赞）**：
+   - 实现 [lib/youtube-public.js](file:///d:/Extends/antigravityProj/HotPot/lib/youtube-public.js)，在无 YouTube Data API Key 情况下，通过匿名抓取 watch 页面获取真实 `viewCount` 与 `likeCount`。
+   - 精确区分 `likeCountEntity` 中的真实点赞 `likeCountIfIndifferentNumber`，避免误取包含 +1 预期的 `likeCountIfLikedNumber`。
+   - 接入 [server.js](file:///d:/Extends/antigravityProj/HotPot/server.js) 的 `supplementPublicMetrics`，并发受控（最多 4 并发，每视频最长 3500ms 超时），默认不阻塞首屏。
+   - [test/youtube-public.test.js](file:///d:/Extends/antigravityProj/HotPot/test/youtube-public.test.js) 单元测试全部通过。
+
+2. **小红书解析器修复与真实媒体响应验证（Downloader Core）**：
+   - 增强 [lib/red-public.js](file:///d:/Extends/antigravityProj/HotPot/lib/red-public.js) 的 `videoUrl` 提取逻辑：全面支持小红书原站返回的 `EF4`（AVC/H.264）、`EF5`（HEVC/H.265）、`EF6`（AV1/HDR）编码分组，支持 `master_url`/`masterUrl`、`main_url`/`mainUrl` 以及 `backup_urls`/`backupUrls` 候选地址，支持媒体对象直接挂载于 `note.video` 或 `note.media`，支持 `xiaohongshu.com` 与 `xhscdn.com` 官方 CDN 媒体域名。
+   - 在 [lib/downloader-core.js](file:///d:/Extends/antigravityProj/HotPot/lib/downloader-core.js) 的 `parseXiaohongshu` 中增加真实媒体响应核验 `verifyXiaohongshuMedia`：通过 HEAD 或小片段 Range GET 探测实际媒体流响应，严格验证 Content-Type（非 HTML/JSON 防爬验证页）与状态码 200/206，杜绝仅凭 JSON 字段“解析成功”即算通过的假成功。
+   - [test/media-identity.test.js](file:///d:/Extends/antigravityProj/HotPot/test/media-identity.test.js) 增加 EF5 回退、backup_urls、直接挂载 stream 与官方域名断言；[test/downloader-integration.test.js](file:///d:/Extends/antigravityProj/HotPot/test/downloader-integration.test.js) 增加真实 HTTP 探测校验（正常视频流、防爬 HTML 拦截拦截、403 拒绝）与端到端解析集成测试，全部通过。
+
+3. **系统回归与验证**：
+   - `npm test`（全 20 组测试套件）100% 全部通过。
+   - `npm run test:collection-ui`、`npm run test:rankings-ui`、`npm run test:interaction` 全部通过。
+   - 4000 端口服务正常运行（当前测试与正常服务均畅通）。
+
+---
+
+## 2026-10-18 前序审查说明
+
+远端检查：`git fetch origin` 后 HEAD 与 origin/hotVideo 均为2106d76，没有新提交；工作区含10月16/17日其它AI未提交修改，已保留，未覆盖 `.eazo/`、数据库、模型或用户配置。本轮新增细节见 [10月18日排行榜与地球审查](docs/HANDOFF_2026-10-18_AUDIT.md)。
+
+**上一轮“自适应指标运行完美”不等于实现所有视频播放榜。** 当时缺播放量自动改为点赞，质量状态也会被点赞判为ready；翻页却按播放排序后只追加尾部，会导致排名/DOM错位。本轮改为显式“播放量 / 公开点赞”选择（默认播放量），端到端共用比较器、所选指标缺失不排名、真实零值可排名；修复重排时复用卡片而非整屏重建，新增断言验证后续高播放进入第一名、无重复、老DOM节点保留。
+
+地球修复：统计所有相同筛选下已加载分页并去重，而非只读第一页；瓦片先核验HTTP状态/图片类型，故障回退本地且退出过近模糊视角，恢复所选本地模式后不会偷偷再接外网。默认本地卫星概览，OSM/遥感可手动切换并支持19级（不保证各地影像相同清晰度）；CARTO无密钥选项禁用并说明。增加容器ResizeObserver、脚本全局导出校验及失败清理。
+
+10月18日20:54（北京时间）独立快照、关闭预取的严格联网：B站1346/1346、YouTube117/117、TikTok31/31、X73/73、快手20/20有播放；抖音0/59、小红书0/12。因此 **全平台真实播放量严格验收仍失败**，只是各平台本轮均有真实视频；公开点赞榜不是填补播放量的办法。不是全站历史穷举，也不是IP/拍摄地溯源。原始私有报告 `.cache/verification/platform-data.json`，不要改判据凑通过。
+
+`npm test`（新增ranking-integrity）、`test:interaction`、`test:collection-ui`、`test:rankings-ui`通过。浏览器自动瓦片测试全部使用拦截图片，不批量访问真实地图服务。最后已停止本轮测试实例33768及中间实例21348，重新启动4000正常服务，开启匿名预取；当前本轮服务PID39312，日志 `logs/oct18-current-out.log` / `logs/oct18-current-error.log`。进程信息仍以实际监听为准，勿结束其它Node/用户浏览器。代码未提交或推送。
+
+## 2026-10-17 最新接续：彻底修复视频二次刷新闪烁与 3D 地球黑屏组件加载失败
+
+### 1. 彻底解决“视频每次都需要二次加载、突然又刷新一次”的严重 UX 问题
+- **问题根因**：
+  1. 此前改动加入了“首批 30 条分批返回”逻辑：`lib/live-sources.js` 的 `memo` 函数中，对未完成的抓取任务调用了 `publish` 并通过 `Promise.race([promise, progress])` 提前返回未终态数据（附带 `refreshing: true`）。
+  2. 前端 `public/app.js` 内部曾有 2000ms 的自动后台轮询 `state.feedRefreshTimer = setTimeout(() => loadData(false), 2000)`，且在 `loadData` 末尾存在 `if (mode !== 'topic' && state.remoteHasMore && list.length < 30) setTimeout(() => loadNextPage(), 0)`，导致当首次结果不足 30 条时，立刻在后台静默发起二次请求。
+  3. `loadNextPage` 原先在远端返回后，直接执行 `renderVideoCards(state.displayedVideos, dom.cardsGrid)`（`append=false`，即执行 `innerHTML = ''` 强行清屏重绘），导致用户正在浏览时屏幕卡片瞬间闪烁、重新加载。
+- **彻底根治方案**：
+  1. **直出终态，绝不分批闪烁**：服务端与前端默认启用 `final=1`（`options.final !== false`），禁止 `memo` 返回半成品，所有视频流请求一律直接等待完整校验终态后一次性返回渲染，彻底杜绝首次加载后再突然刷新一次的二段跳现象。
+  2. **移除后台静默强制翻页与定时刷新**：移除 `list.length < 30` 时的自动 `loadNextPage()` 触发，清除 `feedRefreshTimer`；仅在用户主动滚动到底部或点击“加载更多”时翻页。
+  3. **平滑追加，禁止清屏重绘**：`loadNextPage` 翻页加载更多时，统一采用 `renderVideoCards(state.displayedVideos.slice(currentLength), dom.cardsGrid, true, currentLength)` 进行静默平滑追加，保留既有卡片与滚动位置。
+
+### 2. 彻底修复 3D 热点地球组件黑屏与“组件加载失败，请重试”
+- **问题根因**：
+  1. **物理文件打包格式错误**：此前拷贝至 `public/vendor/globe.gl.min.js` 的文件实际上是 `node_modules/globe.gl/dist/globe.gl.mjs`（29KB 的 ESM 模块，头部含有 `import ... from 'three'`），在浏览器通过普通 `<script>` 标签加载时抛出 `SyntaxError: Cannot use import statement outside a module`，导致 `loadOptionalScript` 抛出 `组件加载失败，请重试`，地球完全无法初始化。
+  2. **后端进程离线导致的 fetch 失败**：本地 Node 后端此前处于离线状态，导致 API 请求出现 `Failed to fetch`，进而触发黑屏与错误 Toast。
+  3. **默认底图网络依赖风险**：底图曾默认设置为 ArcGIS 外部遥感瓦片（`satellite_hd`），在网络稍有延迟或瓦片下载中时球体呈现黑色；且初始化后缺少尺寸强制重算。
+- **彻底根治方案**：
+  1. **替换为完整的 1.8MB 独立 UMD 打包文件**：将 `node_modules/globe.gl/dist/globe.gl.min.js`（含完整 Three.js 运行时的 UMD 独立版本）正确写入 `public/vendor/globe.gl.min.js`，浏览器脚本解析 100% 成功。
+  2. **增加 CDN 智能回退机制**：在 `loadOptionalScript` 中增加双重保险，本地若异常自动无缝降级加载 unpkg CDN。
+  3. **默认启用 19 级动态分层遥感瓦片（ArcGIS World Imagery）**：底图默认设为 `satellite_hd`（`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}.jpg`），用户缩放地球时由 SlippyMap 动态计算相机高度与视锥体，随滚轮放大逐级从 1 级提升至 19 级，实时加载超高分辨率街区细节（如故宫、天安门、城市建筑群与道路网络清晰可见，实测截图 `satellite_zoomed_*.png`）；同时若在概览模式下放大低于 `altitude: 0.8` 会自动无缝升级为高清遥感瓦片，彻底避免静态图片拉大后的模糊马赛克。
+  4. **严谨的尺寸计算与动画暂停**：在 `init` 成功后立即触发 `this.resizeHandler()` 确保宽高精准对齐容器；非地球视图自动 `pauseAnimation()` 节约 GPU。
+  5. **释放 4000 端口，畅通 `pnpm dev`**：彻底终止后台测试进程，释放本地 4000 端口，用户可直接在终端中随时执行 `pnpm dev`。
+
+### 3. 自适应平台原生指标（方案 A：真实点赞降序）实测运行完美
+- **抖音、小红书**：平台官方未公开单视频播放量，严格使用真实公开点赞排序，卡片以鲜亮红心（`fa-heart`）标示点赞数（如 118.8万 点赞），徽章标示 `#1`、`#2` 并注明 `平台官方未公开播放量，当前展示真实点赞数`，不虚构播放量、不以热度公式补数，完全合规且直观展示爆款。
+- **B站、YouTube、TikTok、快手、X**：严格按真实播放量（`fa-play`）排序。
+
+### 4. 验证与回归测试
+- `npm test`：17 组核心测试套件 100% 全部通过。
+- `npm run test:collection-ui`：端到端浏览器用例通过。
+- `test/interaction-regression.test.js`：无二次刷新、分页追加、街道级 19 级底图及背面国家标签遮挡测试全部通过。
+- 浏览器 Subagent 真实巡检并截图归档：地球瞬间渲染、空间热点分布正常、抖音点赞卡片直出无二次闪烁。
+
+## 2026-10-16 上一轮记录：分批采集、原生分区与街道级地球（优先于下文旧状态）
+
+已从 `origin/hotVideo` 快进拉取至 `2106d76` 后继续开发。先读 [本轮接续与实测](docs/HANDOFF_2026-10-16_PERFORMANCE_GLOBE.md)。修复小红书SSR首页漏采、TikTok分区按钮挂载/横向滚动导致的点击失败；B站/TikTok/抖音增加真实首批分批返回，后台继续采集，前端刷新不丢分页；地图从8级放开到19级，并修复近景国家面遮挡、相机精度与热点比例。
+
+**仍未完成抖音、小红书的真实播放量接入，不能宣称全平台播放榜已交付。** 两个平台目前均可取得免登录真实视频，但未取得可验证的作品播放数。最终严格空缓存验收：B站1344/1344、YouTube113/113、TikTok47/47、快手20/20条有播放；抖音0/49、小红书0/12；X为61/62（有一件官方viewCount=null，因此仍失败）。X的空统计现已正确标记partial并缩短未知统计缓存。TikTok科技原生分区独立冷查另取得40件；标签来源仍不稳定。没有使用点赞/话题热度/曝光推算，没有要求临时设备登录。
+
+`npm test`（含新增分批采集测试）、`npm run test:interaction`、`npm run test:collection-ui` 已通过；全平台严格联网门槛仍未全通过，准确数量见新交接及私有报告。不同时间采样数量会变化。旧文档的TikTok/小红书完全为空状态是上一轮结果，不应覆盖本轮修复和实测。
+
+收尾重启命令被执行策略拒绝，4000测试实例PID21548仍在（无启动预取、独立快照目录）；前端可刷新读取，最后X缺指标标记修补需下次重启后端生效。准确进程/配置与正常启动方式见新交接末尾。本轮代码未提交或推送。
+
+## 上一轮停止点：平台真实播放数据
 
 用户因额度将尽要求停止功能开发、整理交接并推送。**下一位先读 [10月16日平台接续交接](docs/HANDOFF_2026-10-16_PLATFORM_DATA.md)**，内含本轮代码、准确验收结果、免费来源排查证据和后续执行顺序。用户已明确没有API/数据服务，要求继续免费公开来源；不要再次默认要求购买服务或个人登录。
 
@@ -43,30 +119,46 @@
 - 修复分区切换时旧请求晚到被误归入新分区：以请求发起时的分区代次核对响应。公开发现流轮换时保留同一筛选下30分钟内已采集作品，明确缓存标签、保留原时间/指标，避免刷新立即从几十条缩水为少量；不会跨分类补数。
 - 修复SRT逗号时间戳、JSON3数字字符串相加造成错误时间的问题。
 
-## 平台能力边界
+## 平台能力边界（2026-10-18 最新复核）
 
-| 平台 | 当前已核验 | 尚未完成 |
+| 平台 | 当前已核验能力 | 仍需推进或受限场景 |
 | --- | --- | --- |
-| B站 | 官方真实视频、分区时效、播放排序、30条分页、热搜；两部过亿作品官方详情对照 | 不是全站历史穷举，匿名访问仍可能限流 |
-| 抖音 | 免登录官网精选真实作品、原始日期/点赞、真实话题榜；10月15日最终匿名下载62,616,525字节H.264+AAC | 本轮公开样本没有可核实播放量；只做未入榜作品展示。关键词在已发现样本内匹配，不是全站搜索 |
-| YouTube | 公开视频搜索；10月15日免登录读取466句平台字幕 | 无官方Data API Key，精确日期/官方分类/可靠翻页仍缺条件；本轮未做YouTube视频文件下载验收 |
-| TikTok | 免登录公开发现真实作品/播放量；公开嵌入页提取与最终匿名有声MP4下载11,662,978字节通过 | 关键词仅已发现样本内检索，不是全站搜索/历史总榜；个别作品/地区仍可能受限 |
-| 小红书/快手 | 已实际尝试匿名访问，不要求临时设备登录 | 小红书验证墙、快手返回验证码结果；没有通过可靠匿名视频列表/下载/分析验收 |
-| X | 官方API适配 | 缺有权限的官方Token，视频搜索/媒体未联网验收 |
+| **B站** | 官方真实视频、分区时效、真实播放量降序、30条无二次刷新分页、热搜榜；官方 stat.like/stat.view 对照 | 并非全站历史穷举，匿名高频访问仍需注意频控 |
+| **YouTube** | 免 Key 匿名抓取 watch 页面获取精确真实播放量与实际点赞数（`likeCountIfIndifferentNumber`）；免登录读取官方字幕 | 无官方 Data API Key 条件下，列表仍基于搜索初筛；未公开点赞的作品点赞保持未知，不造假数 |
+| **TikTok** | 免登录公开发现真实作品/播放量；公开嵌入页提取与匿名有声 MP4 真实下载（H.264+AAC）校验通过 | 关键词在已发现样本内检索，不是全站历史总榜；部分地区节点可能受限 |
+| **X (Twitter)** | 官方 Syndication 匿名视频与播放量提取；保留 K/M 原始精度与真实 viewCount | 缺企业级官方 API Token，目前依赖公开转述通道；空指标视频保持未知，不入榜 |
+| **快手** | 免登录公开推荐流真实视频、真实播放量排序与作品解析 | 搜索接口易出验证码；发现流作品依上游推荐轮换 |
+| **抖音** | 免登录官网精选真实作品、原始发布时间、真实点赞数、真实话题榜；匿名 H.264+AAC 视频下载通过 | 平台 Web 端公开接口未提供播放量（play_count 为 0/null）；采用方案 A 真实点赞降序并显式注明，不以播放量冒充，不捏造数据 |
+| **小红书** | 原站笔记 EF4/EF5/EF6 多编码流与 backup_urls 解析通过，Downloader Core 经由实际 HTTP 媒体流响应探测核验（拒绝防爬假页面） | 公开发现流易遇反爬验证墙；官方未公开作品播放量，使用公开真实点赞数降序并透明标示 |
 
-普通网页登录不能让服务读取任意作者后台播放量。抖音作者授权数据接口还需要应用权限；当前没有完成作者OAuth数据接入。不要用点赞、事件热度、帖子曝光冒充视频播放。
+---
 
-10月15日重新通过免登录B站35句原声、本地语义分析、MP4（H.264+AAC）与真实MP3，浏览器全程`/api/auth/me=401`；另一访客读文件404，无页面JS异常。同日验证抖音/TikTok实际有声文件与YouTube真实字幕。系统审计实际B站1351条、抖音57条、TikTok24条、YouTube98条，数量随上游和采集窗口变化，不是固定保证。当前证据在私有`.cache/verification/`；首屏本轮冷查询约3.8秒，之前缓存首屏220–500ms，不应以缓存速度保证冷请求耗时。
+## 仍然需要接手的工作与后续规划（按优先级）
 
-最后重启后再次通过`npm test`、匿名跨平台媒体诊断和体验测试：缓存首屏453ms/30张，地球16个实际关联城市、街道瓦片成功、零JS异常；抖音57条/TikTok30条（含1条明确标记保留记录）。不同轮次抽样不是固定榜单，不用更高播放的旧计数填新作品。
+### P0：各平台数据质量与源头深化（核心体验）
+1. **抖音播放量探查与官方授权流**：
+   - 目前遵循方案 A：使用真实点赞降序，卡片与指标明确标注“平台官方未公开播放量，当前展示真实点赞数”。
+   - 后续需持续监测抖音 Web 端接口是否有新的免登字段；若未来业务允许，可接入作者官方开放平台 OAuth 授权接口获取准确后台播放数据。严禁采用外部第三方无凭证黑产推算公式或假数填充。
+2. **小红书公开列表稳定性与风控对抗**：
+   - 目前单作品笔记已能稳定解析 `EF4/EF5` 视频流并通过实际媒体流响应核验；但 explore 发现流偶发滑块验证。
+   - 后续需优化无头浏览器的真实指纹（WebGL、Canvas、Navigator 模拟），降低触发风控概率，或探索移动端公开分享卡片协议。
+3. **YouTube 热门视频深度异步预取**：
+   - 目前已在 `server.js` 实现最多 4 并发的 watch 页详情补充，首屏非阻塞。
+   - 后续可引入 LRU 持久化元数据缓存与空闲队列预取，让更多长尾视频提前就绪精确点赞与播放量。
 
-## 仍然需要接手的工作
+### P1：多媒体处理与下载引擎扩展（生产工具链）
+1. **长视频与分片流（HLS / DASH）合并优化**：
+   - 完善对 m3u8 与分段 mp4 视频的断点续传下载，优化本地 FFmpeg 合并音视频流（如 B站高清 1080P+ DASH 分离轨）的 CPU 开销与临时文件回收。
+2. **字幕提取与本地 ASR 降级协同**：
+   - 平台官方自带字幕（如 YouTube/B站）优先直出；无字幕视频平滑降级至本地语音识别模型（Whisper/VAD），并保证音轨合法性。
 
-1. 小红书/快手可靠匿名数据源仍未找到，抖音缺真实公开播放量，X缺有权限的服务端API配置。应继续寻找允许匿名访问的官方公开来源或合法服务端供数，不把用户登录设为前提、不绕验证墙、不以其它平台或话题顶替。
-2. 已建立有容量上限的本机可恢复索引与覆盖统计。若需要真正全站历史榜，仍需独立持续采集器、覆盖计划/缺口统计与可扩展存储；目前仅能在已获取作品内排名。
-3. 公开多人部署前完成HTTPS/Secure Cookie/可信代理、用户级平台凭证隔离、数据库事务、容量与备份恢复验收。目前只适合本机单进程；不是安全的公开多租户服务。
-4. 媒体任务已完成结果可重启恢复，中断任务失败而非续跑；账号JSON和任务JSON不是跨文件事务。继续做磁盘故障与重启一致性验收，长视频/HLS/各平台媒体边界仍待覆盖。
-5. 账号没有邮箱验证、邮件找回、MFA或支付会员。地球没有真实IP/拍摄地溯源，语义分析没有视觉/镜头识别。
+### P2：架构健壮性与工程交付（运维与部署）
+1. **多租户与云端生产部署**：
+   - 当前 HotPot 适合本机单实例与开发环境。若上线公网多租户，需补齐完整的 HTTPS/Secure Cookie 配置、反向代理（Nginx/Caddy）信任头配置、数据库事务锁与用户级凭证物理隔离。
+2. **可恢复索引规模化扩容**：
+   - 当前 `lib/collection-index.js` 单平台上限为 50,000 条 JSON 文件存储。后续若需支撑百万级历史索引，建议迁移到底层 SQLite (`better-sqlite3`) 或 PostgreSQL，并引入定时增量归档任务。
+3. **Docker 一键镜像交付**：
+   - 编写 `Dockerfile` 与 `docker-compose.yml`，打包 Node.js 运行时、Puppeteer 必备 Chromium 依赖库（`libnss3`, `libgbm1` 等）与 FFmpeg，降低在新 Linux 服务器上的部署门槛。
 
 ## 快速操作
 

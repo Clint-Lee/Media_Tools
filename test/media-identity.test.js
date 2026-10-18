@@ -7,6 +7,18 @@ const note='a'.repeat(24),other='b'.repeat(24),url='https://www.xiaohongshu.com/
 const selected=redNote({note:{noteDetailMap:{[other]:{note:{noteId:other,title:'推荐作品'}},[note]:{note:{noteId:note,title:'真实作品'}}}}},url);
 assert.equal(selected.title,'真实作品');
 assert.throws(()=>redNote({note:{noteDetailMap:{[other]:{note:{noteId:other,title:'推荐作品'}}}}},url));
+const {videoUrl}=require('../lib/red-public');
+const actual='https://sns-video-hw.xhscdn.com/fixture.mp4';
+assert.equal(videoUrl({video:{media:{stream:{h264:[],h265:[{masterUrl:actual}]}}}}),actual,'空h264数组不能遮掉真实h265');
+assert.equal(videoUrl({video:{media:{stream:{EF4:[{master_url:actual}],EF5:[]}}}}),actual,'原站EF编码分组不能遗漏');
+assert.equal(videoUrl({video:{mediaV2:JSON.stringify({stream:{EF4:[{masterUrl:actual}]}})}}),actual,'兼容实际JSON格式mediaV2');
+assert.equal(videoUrl({video:{media:{stream:{EF4:[],EF5:[{master_url:actual}]}}}}),actual,'空EF4时必须回退到真实EF5');
+assert.equal(videoUrl({video:{media:{stream:{EF4:[{backup_urls:[actual]}]}}}}),actual,'master_url缺失时读取backup_urls');
+assert.equal(videoUrl({video:{media:{stream:{EF4:[{backupUrls:[actual]}]}}}}),actual,'兼容驼峰backupUrls');
+assert.equal(videoUrl({video:{stream:{EF4:[{master_url:actual}]}}}),actual,'兼容直接挂载在video上的stream');
+assert.equal(videoUrl({media:{stream:{EF4:[{master_url:actual}]}}}),actual,'兼容直接挂载在media上的stream');
+assert.equal(videoUrl({video:{media:{stream:{EF4:[{master_url:'https://sns-video-qc.xiaohongshu.com/fixture.mp4'}]}}}}),'https://sns-video-qc.xiaohongshu.com/fixture.mp4','接受xiaohongshu.com官方媒体域名');
+assert.equal(videoUrl({video:{media:{stream:{EF4:[{masterUrl:'http://127.0.0.1/private'},{masterUrl:'https://xhscdn.com.attacker.invalid/video.mp4'}]}}}}),null,'只接受原站实际返回的合法媒体域名');
 const sources=require('../lib/live-sources');
 sources.withPage=async()=>{throw new Error('valid-id-reached-browser')};
 const {sniffDouyinVideo}=require('../lib/douyin-sniffer');

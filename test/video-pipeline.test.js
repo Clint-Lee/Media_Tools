@@ -1,8 +1,11 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { normalizeTimestamp, parseHeat, prepareVideoList } = require('../lib/video-pipeline');
+const { normalizeTimestamp, parseHeat, parseVideoViews, prepareVideoList } = require('../lib/video-pipeline');
 assert.equal(parseHeat('12.5万'), 125000);
 assert.equal(parseHeat('1.2M views'), 1200000);
+for(const invalid of [NaN,Infinity,-1,1.5,true,{},'', '未公开','NaN','17万热度','999999999999999999999'])assert.equal(parseVideoViews(invalid),null,'异常指标不能变成真实零播放');
+assert.equal(parseVideoViews(0),0);assert.equal(parseVideoViews('1.2M views'),1200000);
+assert.equal(prepareVideoList([{id:'invalid',title:'异常计数',platform:'tiktok',playRaw:NaN}])[0].playRaw,null);
 assert.equal(normalizeTimestamp(1720000000000), 1720000000);
 const now = 2_000_000_000;
 const input = [

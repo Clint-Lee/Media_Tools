@@ -37,6 +37,7 @@ logs/
 tmp/
 temp/
 .cache/
+.eazo/
 
 # Databases & Local data storage
 *.sqlite

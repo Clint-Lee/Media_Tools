@@ -287,6 +287,7 @@
             <div id="source-status" class="source-status" role="status" aria-live="polite">正在读取平台真实数据…</div>
             <div class="system-status-entry"><button id="btn-system-status" class="cyber-btn-secondary">数据源与功能实测状态</button> <button id="btn-platform-connect" class="cyber-btn-secondary">免登录模式与数据边界</button></div>
             <div class="ranking-context" id="ranking-context">
+                <label>排行指标 <select id="ranking-metric" aria-label="视频排行指标"><option value="views">播放量（缺失不排名）</option><option value="likes">公开点赞（不是播放量）</option></select></label>
                 <span id="ranking-scope">正在核验榜单范围…</span>
                 <details id="source-details" class="hidden"><summary>查看数据覆盖</summary><div id="source-details-content"></div></details>
             </div>
@@ -299,9 +300,17 @@
                         <p id="geo-source-note">按已采集视频中的明确地名统计，不代表作者所在地或全网总量</p>
                         <div class="globe-controls">
                             <label>样本 <select id="geo-scope"><option value="available">已采集平台汇总</option><option value="current">当前平台</option></select></label>
-                            <label>底图 <select id="geo-basemap"><option value="satellite">卫星 + 城市名称</option><option value="streets">街道地图瓦片</option></select></label>
+                            <label>底图 <select id="geo-basemap">
+                                <option value="satellite_hd">遥感影像（动态瓦片 · 网络可用时）</option>
+                                <option value="streets">🗺️ 高清街道建筑 (OSM/道路网)</option>
+                                <option value="dark_matter" disabled>CARTO 暗黑地图（未配置服务密钥）</option>
+                                <option value="satellite" selected>本地卫星概览（静态 · 无需外部网络）</option>
+                            </select></label>
                             <label class="geo-layer-switch"><input type="checkbox" id="geo-countries" checked> 国家分色与名称</label>
                             <button id="geo-refresh" class="cyber-btn-secondary">更新分布</button>
+                            <button id="geo-zoom-in" class="cyber-btn-secondary" aria-label="放大地图" title="放大地图">＋</button>
+                            <button id="geo-zoom-out" class="cyber-btn-secondary" aria-label="缩小地图" title="缩小地图">－</button>
+                            <button id="geo-reset-view" class="cyber-btn-secondary" title="返回全球视角">全球视角</button>
                         </div>
                     </div>
                     <div class="globe-metrics">
@@ -330,7 +339,7 @@
                     <h3>正在初始化 3D 空间雷达...</h3>
                     <p>正在计算全球热点城市空间坐标...</p>
                 </div>
-                <div class="globe-hint"><span id="geo-map-status">左键拖动 · 滚轮缩放 · 城市名为地理参考，彩色点才代表视频数量</span> <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">地理参考：Natural Earth（非测绘边界）</a> <a id="geo-attribution" class="hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></div>
+                <div class="globe-hint"><span id="geo-map-status">左键拖动 · 滚轮缩放 · 城市名为地理参考，彩色点才代表视频数量</span> <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">地理参考：Natural Earth（非测绘边界）</a> <span id="geo-attribution" class="hidden"><a href="https://www.esri.com/" target="_blank" rel="noopener">© Esri, Maxar</a></span></div>
             </section>
 
             <!-- Scrollable Content Grid -->
@@ -1154,6 +1163,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <script src="/vendor/jszip.min.js"></script>
+    <script src="ranking.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

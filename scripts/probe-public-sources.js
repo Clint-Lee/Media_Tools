@@ -4,6 +4,7 @@ require('../lib/env');
 const fs=require('fs'),path=require('path');
 const {withPage,boundedMap,closeBrowser}=require('../lib/live-sources');
 const targets=[
+    ['douyin','jingxuan','https://www.douyin.com/jingxuan'],
     ['douyin','discover','https://www.douyin.com/discover'],
     ['douyin','search','https://www.douyin.com/search/%E7%A7%91%E6%8A%80?type=video'],
     ['tiktok','trends','https://ads.tiktok.com/creative/creativeCenter/trends'],
@@ -18,7 +19,7 @@ const targets=[
     ['kuaishou','search','https://www.kuaishou.com/search/video?searchKey=%E7%A7%91%E6%8A%80'],
     ['kuaishou','brilliant','https://www2.kuaishou.com/brilliant'],
     ['twitter','timeline','https://syndication.twitter.com/srv/timeline-profile/screen-name/NASA']
-].filter(row=>!process.argv[2] || row[0]===process.argv[2]);
+].filter(row=>(!process.argv[2] || row[0]===process.argv[2]) && (!process.argv[3] || row[1]===process.argv[3]));
 (async()=>{
     if(!process.env.MEDIA_PROXY)try{const settings=await(await fetch('http://127.0.0.1:4000/api/settings',{signal:AbortSignal.timeout(1500)})).json();if(settings.proxy)process.env.MEDIA_PROXY=settings.proxy;}catch{}
     await boundedMap(targets,2,async([platform,kind,url])=>{
@@ -28,17 +29,20 @@ const targets=[
                 await page.setRequestInterception(true);
                 page.on('request',r=>['image','font','media'].includes(r.resourceType())?r.abort():r.continue());
                 page.on('response',response=>{
-                    if(!/json/.test(response.headers()['content-type'] || '') || !new URL(response.url()).hostname.endsWith(new URL(url).hostname.split('.').slice(-2).join('.')))return;
+                    if(!new URL(response.url()).hostname.endsWith(new URL(url).hostname.split('.').slice(-2).join('.')))return;
+                    if(response.request().isNavigationRequest())captures.push(response.text().then(html=>records.push({url:response.url(),status:response.status(),html})).catch(()=>{}));
+                    if(!/json/.test(response.headers()['content-type'] || '') && !/homefeed|module\/feed|item_list/.test(response.url()))return;
                     captures.push(response.json().then(data=>records.push({url:response.url(),status:response.status(),method:response.request().method(),body:response.request().postData(),data})).catch(()=>{}));
                 });
                 await page.goto(url,{waitUntil:'domcontentloaded',timeout:14000}).catch(()=>{});
-                if(platform==='xiaohongshu') { const close=await page.$('.close-button'); if(close)await close.click().catch(()=>{}); }
+                if(platform==='xiaohongshu') { try { await page.waitForSelector('.close-button',{visible:true,timeout:4000});await page.click('.close-button'); } catch {} }
                 await page.evaluate(()=>window.scrollBy(0,800));
                 await new Promise(resolve=>setTimeout(resolve,3000));
                 const state=await page.evaluate(()=>({url:location.href,title:document.title,text:document.body?.innerText?.slice(0,1500),
                     controls:[...document.querySelectorAll('a,button,[role="button"]')].filter(e=>/科技|知识|喜剧|动物|穿搭|推荐|精选/.test(e.textContent) && e.textContent.length<30).map(e=>({tag:e.tagName,text:e.textContent,href:e.getAttribute('href'),attrs:[...e.attributes].filter(a=>/data-|class/.test(a.name)).map(a=>[a.name,a.value])})).slice(0,30),
                     scrollers:[...document.querySelectorAll('main,div')].filter(e=>e.clientHeight>300 && e.scrollHeight>e.clientHeight+200).slice(0,10).map(e=>({tag:e.tagName,classes:e.className,height:e.clientHeight,scrollHeight:e.scrollHeight})),
                     initial:window.__INITIAL_STATE__ || window.__APOLLO_STATE__ || null,router:window._ROUTER_DATA || null,
+                    cards:[...document.querySelectorAll('.note-item')].slice(0,4).map(e=>({html:e.outerHTML.slice(0,10000)})),
                     scripts:[...document.querySelectorAll('script[type="application/json"],#RENDER_DATA,#SIGI_STATE,#__UNIVERSAL_DATA_FOR_REHYDRATION__,#__NEXT_DATA__')].map(s=>({id:s.id,text:s.textContent?.slice(0,4000000)}))}));
                 await Promise.allSettled(captures);return state;
             },{anonymous:true});

@@ -40,6 +40,8 @@ app.use((req,res,next)=>{
     next();
 });
 app.get('/vendor/globe.gl.min.js', (req, res) => {
+    const local = path.join(__dirname, 'public', 'vendor', 'globe.gl.min.js');
+    if (fs.existsSync(local)) return res.sendFile(local);
     res.sendFile(path.join(globeDistDir, 'globe.gl.min.js'));
 });
 app.get('/vendor/earth-blue-marble.jpg', (req, res) => {
@@ -483,8 +485,11 @@ function filterByTimeRange(list, timeRange) {
 }
 
 function sendVideoList(res, list, timeRange, extra = {}) {
+    if(extra.sortBy==='likes')extra={...extra,scope:extra.scope?{...extra.scope,metric:'likes'}:undefined,sourceDescription:extra.sourceMessage,
+        sourceMessage:'当前为公开点赞榜，不是播放榜。按已采集作品的真实点赞排序，缺少点赞不入榜；来源：'+(extra.source || '平台公开数据')};
     const prepared = attachVideoLocations(prepareVideoList(list, {
         timeRange,
+        sortBy:extra.sortBy,
         requireKnownDate: timeRange !== 'all',
         limit: 2000
     }));
@@ -494,8 +499,8 @@ function sendVideoList(res, list, timeRange, extra = {}) {
         list: prepared,
         total: prepared.length,
         timeRange: timeRange || 'all',
-        sortedBy: 'views_desc_unknown_last',
-        ranking: { ranked:prepared.filter(v=>v.playRaw!==null).length, unranked:prepared.filter(v=>v.playRaw===null).length, metric:'views' },
+        sortedBy: (extra.sortBy || 'views')+'_desc_unknown_last',
+        ranking: require('./public/ranking').summary(prepared,extra.sortBy),
         geoCoverage: {
             located: locatedCount,
             total: prepared.length,
@@ -532,11 +537,11 @@ function extractYouTubeVideos(obj) {
                     cover,
                     duration,
                     playCount,
-                    playRaw: v.viewCountText?.simpleText ? rawPlay : null,
+                    ...require('./lib/metric-evidence').metricFields('views',v.viewCountText?.simpleText),
                     metric: 'views',
                     metricLabel: '播放',
                     source: 'youtube:public-search',
-                    commentCount: '0',
+                    commentCount: null,
                     author,
                     url: `https://www.youtube.com/watch?v=${videoId}`,
                     platform: 'YouTube',
@@ -618,9 +623,22 @@ async function fetchYouTubeLive(options) {
     const candidates = results.flatMap(r => r.value || []).filter(video => !maxAge || video.publishedAgeUpperBound !== null && video.publishedAgeUpperBound <= maxAge);
     const list = prepareVideoList(candidates, { timeRange: options.timeRange, limit: 2000 });
     return { list, hasMore: false, source: 'youtube:public-search', partial: results.some(r => r.error),
-        scope: { kind: 'search-sample', label: '关键词主题样本 · 近似日期', exhaustive: false, metric: 'views', categoryMethod: 'semantic-search' },
+        scope: { kind: 'search-sample', label: '关键词主题样本 · 日期精度见作品', exhaustive: false, metric: 'views', categoryMethod: 'semantic-search' },
         coverage: { candidates: candidates.length, unique: list.length },
-        message: 'YouTube 多关键词主题搜索（非官方分区），按页面播放量排序；近似日期采用保守边界筛选，不是全站榜。精确日期、官方分区与继续翻页需配置 YOUTUBE_API_KEY。' };
+        message: 'YouTube 多关键词主题搜索（非官方分区），按页面播放量排序；近似日期采用保守边界筛选，不是全站榜。官方分区与可靠继续翻页需配置 YOUTUBE_API_KEY。' };
+}
+
+async function supplementPublicMetrics(result,options) {
+    if(options.platform!=='youtube' || process.env.YOUTUBE_API_KEY)return result;
+    const notes=require('./lib/youtube-public');
+    if(options.sortBy==='likes')await notes.enrich(result.list);
+    else notes.enrich(result.list).catch(()=>{});
+    const list=notes.apply(result.list),pending=notes.pendingCount(result.list)>0;
+    let collection=result.collection;
+    if(list.some((video,i)=>video!==result.list[i]))try {collection=require('./lib/collection-index').record('youtube',list,options);}
+    catch(error){collection={status:'write-failed',message:error.message};}
+    return {...result,list,collection,refreshing:result.refreshing || pending,
+        message:result.message+' 可访问作品的原站详情补充精确播放与公开点赞，不取“点赞后人数”。'+(pending?' 详情正在后台补充，可稍后刷新查看。':'')};
 }
 
 app.get('/api/platforms', (req, res) => { res.setHeader('Cache-Control','no-store'); res.json({ success:true, list:require('./lib/platform-rankings').capabilities().map(p=>({...p,verification:liveSources.getSourceStatus(p.platform)})) }); });
@@ -639,7 +657,9 @@ function liveOptions(req) {
     if (typeof query !== 'string' || query.length > 100) throw new Error('关键词应为 100 字以内的文本');
     const cursor = req.query.cursor || '';
     if (typeof cursor !== 'string' || cursor.length > 2000 || /[\r\n]/.test(cursor)) throw new Error('翻页参数无效');
-    return { platform, category, timeRange, query: query.trim(), cursor, page: Math.min(10, Math.max(1, parseInt(req.query.page) || 1)), refresh: req.query.refresh === '1' };
+    const sortBy=req.query.sort || 'views';
+    if(!['views','likes'].includes(sortBy))throw new Error('排序指标无效');
+    return { platform, category, timeRange, query: query.trim(), cursor, sortBy, page: Math.min(10, Math.max(1, parseInt(req.query.page) || 1)), refresh: req.query.refresh === '1', final: req.query.final !== '0' };
 }
 
 async function handleLiveVideos(req, res) {
@@ -648,12 +668,13 @@ async function handleLiveVideos(req, res) {
     catch (error) { return res.status(400).json({ success: false, message: error.message }); }
     if (req.path === '/api/search' && !options.query) return res.status(400).json({ success: false, message: '请输入搜索关键词' });
     try {
-        const result = await liveSources.getVideos(options, fetchYouTubeLive);
+        const result = await supplementPublicMetrics(await liveSources.getVideos(options, fetchYouTubeLive),options);
         return sendVideoList(res, result.list, options.timeRange, {
+            sortBy:options.sortBy,
             source: result.source, sourceMessage: result.message, partial: result.partial || false,
             hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false, refreshing:result.refreshing || false,
             fetchedAt: result.list[0]?.fetchedAt || Date.now(), collection: result.collection,
-            dataQuality: require('./lib/data-quality').videoDataQuality(result.list, result)
+            dataQuality: require('./lib/data-quality').videoDataQuality(result.list, {...result,sortBy:options.sortBy})
         });
     } catch (error) {
         return res.status(502).json({ success: false, error: 'LIVE_SOURCE_UNAVAILABLE', list: [], message: error.message });
@@ -688,8 +709,8 @@ app.get('/api/search-topic', async (req, res) => {
     try { options = liveOptions(req); if (!options.query) throw new Error('缺少话题关键词'); }
     catch (error) { return res.status(400).json({ success: false, message: error.message }); }
     try {
-        const result = await liveSources.getVideos(options, fetchYouTubeLive);
-        return sendVideoList(res, result.list, options.timeRange, { source: result.source, sourceMessage: result.message, scope: result.scope, coverage: result.coverage, hasMore: false });
+        const result = await supplementPublicMetrics(await liveSources.getVideos(options, fetchYouTubeLive),options);
+        return sendVideoList(res, result.list, options.timeRange, { sortBy:options.sortBy, source: result.source, sourceMessage: result.message, scope: result.scope, coverage: result.coverage, hasMore: false });
     } catch (error) { return res.status(502).json({ success: false, list: [], message: error.message }); }
 });
 app.get('/api/geo-hotspots', async (req, res) => {
