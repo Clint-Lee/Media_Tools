@@ -1765,6 +1765,11 @@ const handleParse = async () => {
       targetUrl: data.targetUrl,
       platform: data.platform || '未知平台',
       description: data.description || '该视频未提供额外的文案描述。',
+      author: data.author || '',
+      duration: data.duration || 0,
+      stats: data.stats || null,
+      hotListViews: data.hotListViews || null,
+      isImageNote: data.isImageNote || false,
       aiSummary: {
         category: '综合创作',
         points: ['已提取高清视频物理流直链。', '点击下方的按钮可直接高速下载。', '若要转写人声文案与 AI 总结，请点击上方相应页签。'],
@@ -1850,6 +1855,65 @@ const platformClass = computed(() => {
   if (p === 'youtube') return 'youtube'
   return 'generic'
 })
+
+// ===== 播放量/互动数据展示（结构化 stats）=====
+// 后端返回的 stats 结构：
+//   { metrics: { play:{value,source}, like:{...}, ... }, missing: [...], note: '' }
+//   同时保留了便捷字段 stats.play / stats.like ... 直接是数字或 null
+// 原则：只展示真实存在的数字；平台不提供的指标不渲染，并在 missing 里说明
+const formatStatCount = (n) => {
+  if (n === null || n === undefined || n === '') return ''
+  const num = Number(n)
+  if (Number.isNaN(num)) return String(n)
+  if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿'
+  if (num >= 10000) return (num / 10000).toFixed(1) + '万'
+  return String(num)
+}
+
+// 各平台实际能提供的指标（顺序即展示顺序）
+const STAT_ORDER = ['play', 'danmaku', 'like', 'comment', 'collect', 'coin', 'share', 'recommend']
+const STAT_LABEL = {
+  play: '播放', danmaku: '弹幕', like: '点赞', comment: '评论',
+  collect: '收藏', coin: '投币', share: '分享', recommend: '推荐'
+}
+
+const displayStats = computed(() => {
+  const s = parseResult.value && parseResult.value.stats
+  if (!s) return []
+  const items = []
+  for (const key of STAT_ORDER) {
+    // 优先读结构化 metrics，回退到便捷字段
+    let value = null
+    let source = null
+    if (s.metrics && s.metrics[key]) {
+      value = s.metrics[key].value
+      source = s.metrics[key].source
+    } else if (s[key] !== null && s[key] !== undefined) {
+      value = s[key]
+    }
+    if (value === null || value === undefined) continue
+    items.push({ key, label: STAT_LABEL[key] || key, value, source })
+  }
+  return items
+})
+
+// 这个平台明确不提供哪些指标（用于给用户一个诚实的说明）
+const missingStatLabels = computed(() => {
+  const s = parseResult.value && parseResult.value.stats
+  if (!s || !Array.isArray(s.missing)) return []
+  const shown = new Set(displayStats.value.map(i => i.key))
+  return s.missing
+    .filter(k => !shown.has(k) && STAT_LABEL[k])
+    .map(k => STAT_LABEL[k])
+})
+
+const formatDuration = (ms) => {
+  if (!ms || Number(ms) <= 0) return ''
+  const total = Math.round(Number(ms) / 1000)
+  const m = Math.floor(total / 60)
+  const sec = total % 60
+  return `${m}:${String(sec).padStart(2, '0')}`
+}
 
 // 解析提取文案中的话题标签与主体文本
 const parsedCopywriting = computed(() => {
@@ -3702,6 +3766,31 @@ const fillExample = (url) => {
                 <div class="tabs-content">
                   <!-- Tab 1: Video Info -->
                   <div v-if="activeTab === 'video'" class="tab-pane animate-fade-in">
+                    <!-- 播放量 / 互动数据（全部为真实值，平台不提供的指标不渲染） -->
+                    <div v-if="displayStats.length > 0" class="stats-panel">
+                      <div
+                        v-for="item in displayStats"
+                        :key="item.key"
+                        class="stat-cell"
+                        :class="'stat-' + item.key"
+                        :title="item.source ? '数据来源: ' + item.source : ''"
+                      >
+                        <div class="stat-value">{{ formatStatCount(item.value) }}</div>
+                        <div class="stat-label">{{ item.label }}</div>
+                      </div>
+                    </div>
+                    <p v-if="parseResult.stats && parseResult.stats.note" class="stats-note">
+                      {{ parseResult.stats.note }}
+                    </p>
+                    <p v-else-if="missingStatLabels.length > 0" class="stats-note">
+                      该平台未公开：{{ missingStatLabels.join('、') }}
+                    </p>
+                    <!-- 抖音热榜字段：口径未核验，单独列出，不冒充播放量 -->
+                    <p v-if="parseResult.hotListViews" class="stats-note stats-note-warn">
+                      热榜字段值 {{ formatStatCount(parseResult.hotListViews.value) }}
+                      （来源 {{ parseResult.hotListViews.source }}，统计口径未核验，不等同于播放量）
+                    </p>
+
                     <div class="diagnostic-grid">
                       <div class="diag-item">
                         <div class="diag-label">嗅探解析耗时</div>
@@ -3718,6 +3807,18 @@ const fillExample = (url) => {
                     </div>
 
                     <div class="meta-info">
+                      <div class="info-row" v-if="parseResult.author">
+                        <span class="info-label">作者:</span>
+                        <span class="info-text">{{ parseResult.author }}</span>
+                      </div>
+                      <div class="info-row" v-if="formatDuration(parseResult.duration)">
+                        <span class="info-label">时长:</span>
+                        <span class="info-text">{{ formatDuration(parseResult.duration) }}</span>
+                      </div>
+                      <div class="info-row" v-if="parseResult.isImageNote">
+                        <span class="info-label">笔记类型:</span>
+                        <span class="info-text">图文笔记（无视频流，仅展示封面与互动数据）</span>
+                      </div>
                       <div class="info-row">
                         <span class="info-label">源网页链接:</span>
                         <a :href="parseResult.targetUrl" target="_blank" class="info-link">{{ parseResult.targetUrl }}</a>
@@ -4773,6 +4874,81 @@ const fillExample = (url) => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 10px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+/* ===== 播放量 / 互动数据面板 ===== */
+.stats-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stat-cell {
+  background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.stat-cell:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.18);
+}
+
+.stat-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary, #fff);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.stat-play .stat-value { color: #4ade80; }
+.stat-like .stat-value { color: #f472b6; }
+.stat-comment .stat-value { color: #60a5fa; }
+.stat-collect .stat-value { color: #fbbf24; }
+.stat-coin .stat-value { color: #f59e0b; }
+.stat-share .stat-value { color: #a78bfa; }
+.stat-danmaku .stat-value { color: #22d3ee; }
+
+.stats-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: rgba(251,191,36,0.08);
+  border-left: 3px solid rgba(251,191,36,0.5);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: -6px 0 18px;
+  line-height: 1.5;
+}
+
+/* 口径未核验的字段：更醒目地区分，避免被误读为真实播放量 */
+.stats-note-warn {
+  background: rgba(167,139,250,0.10);
+  border-left-color: rgba(167,139,250,0.65);
+  margin-top: -10px;
 }
 
 .info-label {

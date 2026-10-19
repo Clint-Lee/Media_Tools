@@ -1013,6 +1013,776 @@ function generateAISummary(title, desc, platform) {
     };
 }
 
+// ============================================================================
+// 抖音解析专用模块（页面上下文签名法）
+//
+// 背景：抖音 Web 的 /aweme/v1/web/aweme/detail/ 受 ArgusSecurityPlugin 保护，
+// 校验的是请求签名 a_bogus（不是 cookie）。实测：
+//   - node 侧 axios + 完整 cookie(ttwid/UIFID/s_v_web_id/msToken) => 403 "Uifid Not Found"
+//   - page.evaluate 里 fetch 同源接口 => 200，aweme_detail 完整
+// 原因：抖音的 webmssdk/Argus 运行时把签名器挂在页面环境里，
+//       在页面上下文发请求会被自动补上当前版本的 a_bogus。
+// 所以这里"让浏览器替我们签名"，永远不在 node 里手写签名算法。
+// ============================================================================
+
+const DOUYIN_PC_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const DOUYIN_ORIGIN = 'https://www.douyin.com';
+
+// 从任意文本（含中文、emoji 的分享文案）中挑出抖音链接
+// 用 URL 解析而非宽松正则：避免把紧跟链接的中文/emoji 吃进 URL，
+// 也避免把 http://xx.douyin.com.evil.com 这类伪造域误判为抖音。
+function isDouyinHost(host) {
+    return host === 'douyin.com' || host.endsWith('.douyin.com')
+        || host === 'iesdouyin.com' || host.endsWith('.iesdouyin.com');
+}
+
+function extractDouyinLink(text) {
+    if (!text) return null;
+    const candidates = String(text).match(/https?:\/\/[a-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+/gi) || [];
+    for (const c of candidates) {
+        const cleaned = c.replace(/[.,;!?'")\]]+$/g, '');
+        try {
+            const u = new URL(cleaned);
+            if (isDouyinHost(u.hostname) && !u.username && !u.password) return u.href;
+        } catch (e) { }
+    }
+    return null;
+}
+
+// 从 URL 里抠 aweme_id
+function awemeIdFromUrl(value) {
+    if (!value) return null;
+    try {
+        const u = new URL(value);
+        if (!isDouyinHost(u.hostname)) return null;
+        const m = u.pathname.match(/\/(?:share\/)?(?:video|note|slides)\/(\d+)(?:\/|$)/);
+        if (m) return m[1];
+        for (const k of ['modal_id', 'aweme_id', 'item_id']) {
+            const id = u.searchParams.get(k);
+            if (id && /^\d+$/.test(id)) return id;
+        }
+    } catch (e) { }
+    return null;
+}
+
+// 用独立 page 跟随短链 302，不污染工作页面已初始化的签名环境
+// （在 evaluate 里 fetch 短链会因 CORS/opaque redirect 直接失败）
+async function resolveDouyinAwemeId(page, link) {
+    const direct = awemeIdFromUrl(link);
+    if (direct) return direct;
+
+    const resolver = await page.browserContext().newPage();
+    let seenId = null;
+    let navErr = null;
+    const onRequest = (req) => {
+        try {
+            if (req.isNavigationRequest() && req.frame() === resolver.mainFrame()) {
+                seenId = seenId || awemeIdFromUrl(req.url());
+            }
+        } catch (e) { }
+    };
+    resolver.on('request', onRequest);
+    try {
+        try {
+            await resolver.goto(link, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } catch (e) { navErr = e; }
+
+        // 兼容"先返回分享页、再执行客户端跳转"的短链
+        const deadline = Date.now() + 5000;
+        while (!seenId && Date.now() < deadline) {
+            seenId = awemeIdFromUrl(resolver.url());
+            if (!seenId) await new Promise(r => setTimeout(r, 250));
+        }
+        const id = awemeIdFromUrl(resolver.url()) || seenId;
+        if (!id) throw new Error('短链未解析到作品 ID；可能已失效或进入验证页' + (navErr ? `（${navErr.name}）` : ''));
+        return id;
+    } finally {
+        resolver.off('request', onRequest);
+        await resolver.close().catch(() => { });
+    }
+}
+
+// 在页面上下文里请求 detail 接口（带诊断分类 + 有限重试）
+async function fetchDouyinDetailInPage(page, awemeId, attempts = 3) {
+    let lastError = '未取得作品详情';
+
+    for (let i = 0; i < attempts; i++) {
+        if (i > 0) {
+            // 指数退避：1s / 2s
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i - 1)));
+        }
+
+        const result = await page.evaluate(async (id) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            try {
+                const qs = new URLSearchParams({
+                    device_platform: 'webapp', aid: '6383', channel: 'channel_pc_web',
+                    aweme_id: id, pc_client_type: '1', version_code: '190500', version_name: '19.5.0',
+                    cookie_enabled: 'true', screen_width: '1440', screen_height: '900',
+                    browser_language: 'zh-CN', browser_platform: 'Win32', browser_name: 'Chrome',
+                    browser_version: '124.0.0.0', browser_online: 'true',
+                    engine_name: 'Blink', engine_version: '124.0.0.0', os_name: 'Windows',
+                    os_version: '10', cpu_core_num: '8', device_memory: '8', platform: 'PC',
+                    downlink: '10', effective_type: '4g', round_trip_time: '50'
+                });
+                const r = await fetch('/aweme/v1/web/aweme/detail/?' + qs.toString(), {
+                    credentials: 'include',
+                    headers: { accept: 'application/json, text/plain, */*' },
+                    signal: controller.signal
+                });
+                const text = await r.text();
+                let json = null;
+                try { json = JSON.parse(text); } catch (e) { }
+
+                // 只返回诊断分类，不落 Cookie / 签名 / 整段响应
+                return {
+                    status: r.status,
+                    json,
+                    argusBlocked: /ArgusSecurityPlugin/i.test(text),
+                    uifidMissing: /Uifid Not Found/i.test(text),
+                    signatureMissing: /Signature Not Found/i.test(text),
+                    nonJson: json === null
+                };
+            } catch (e) {
+                return { status: 0, json: null, networkError: String(e && e.name || 'FetchError'), nonJson: true };
+            } finally {
+                clearTimeout(timer);
+            }
+        }, awemeId);
+
+        const body = result.json;
+        const candidate = body && body.aweme_detail;
+
+        // 契约校验：HTTP 200 + status_code 正常 + 有 detail + id 必须匹配
+        // （id 不匹配说明命中了错误的缓存或推荐结果，不是我们要的那条）
+        if (
+            result.status === 200 &&
+            (body && body.status_code == null || body.status_code === 0) &&
+            candidate &&
+            String(candidate.aweme_id) === String(awemeId)
+        ) {
+            return candidate;
+        }
+
+        lastError = [
+            `HTTP ${result.status}`,
+            body && body.status_code != null ? `status_code=${body.status_code}` : null,
+            result.argusBlocked ? 'Argus 拦截' : null,
+            result.uifidMissing ? 'Uifid Not Found' : null,
+            result.signatureMissing ? 'Signature Not Found' : null,
+            result.nonJson ? '非 JSON 响应' : null,
+            result.networkError,
+            candidate && String(candidate.aweme_id) !== String(awemeId) ? '响应作品 ID 不匹配' : null,
+            body && body.filter_detail && body.filter_detail.filter_reason ? `filter=${body.filter_detail.filter_reason}` : null
+        ].filter(Boolean).join('；');
+
+        // 明确的业务失败（限流 / 作品不可见）重试也没用，直接跳出
+        if (result.status === 429 || (body && body.status_code != null && body.status_code !== 0)) {
+            break;
+        }
+    }
+
+    throw new Error(lastError);
+}
+
+// ============================================================================
+// 统一统计数据结构
+//
+// 设计原则（绝不造假，宁可留 null）：
+//   - 每个指标要么是真实数字，要么是 null
+//   - 每个指标带 source 标明来源，前端可据此决定是否展示/如何标注
+//   - missing 数组明确告诉前端"这个平台不提供哪些指标"
+//   - 平台不提供播放量时，play.available=false，前端就不该渲染"播放"格子
+//
+// 各平台真实可得字段：
+//   B站    : stat.view/danmaku/like/reply/favorite/coin/share  ← 全都有，最完整
+//   抖音   : statistics.digg/comment/collect/share/recommend
+//            play_count 恒为 0（字节已停止下发）；仅热榜视频有 hot_list.view_count
+//   快手   : photo.viewCount（真实播放量） / realLikeCount
+//            评论数需另调 commentListQuery 的 commentCountV2；无 shareCount 字段
+//   小红书 : interactInfo.likedCount/commentCount/collectedCount/shareCount
+//            无播放量字段
+// ============================================================================
+
+const STAT_LABELS = {
+    play: '播放', danmaku: '弹幕', like: '点赞', comment: '评论',
+    collect: '收藏', coin: '投币', share: '分享', recommend: '推荐'
+};
+
+/**
+ * 构建某个指标的标准化单元
+ * @param {number|null|undefined} value 真实数值
+ * @param {string|null} source 来源标识
+ */
+function statCell(value, source) {
+    const n = (value === null || value === undefined || value === '') ? null : Number(value);
+    if (n === null || !Number.isFinite(n)) return null;
+    return { value: n, source: source || null };
+}
+
+/**
+ * 组装统一 stats
+ * @param {object} cells  { play, like, comment, ... } 每项是 statCell 的返回或原始数字
+ * @param {string[]} missing 平台明确不提供的指标
+ * @param {string} note 给用户看的说明（可选）
+ */
+function buildStats(cells, missing = [], note = '') {
+    const out = {};
+    const missingOut = new Set(missing);
+
+    for (const key of Object.keys(STAT_LABELS)) {
+        const cell = cells[key];
+        if (cell && typeof cell === 'object' && 'value' in cell) {
+            out[key] = cell;
+        } else if (cell !== undefined && cell !== null) {
+            out[key] = statCell(cell, 'api');
+        } else {
+            out[key] = null;
+        }
+        // 值为 null 的自动归入 missing
+        if (out[key] === null) missingOut.add(key);
+    }
+
+    const result = {
+        metrics: out,
+        missing: [...missingOut],
+        note: note || ''
+    };
+    // 便捷字段：让老前端也能直接读 stats.play 拿到数字
+    for (const key of Object.keys(STAT_LABELS)) {
+        result[key] = out[key] ? out[key].value : null;
+    }
+    return result;
+}
+
+// 解析 "4.2万" / "1.4万" / "9122" / "536" 这类中文字符串计数
+function parseCnNumber(val) {
+    if (val === null || val === undefined || val === '') return null;
+    if (typeof val === 'number') return Number.isFinite(val) ? val : null;
+    const s = String(val).trim().replace(/,/g, '');
+    if (!s) return null;
+    const m = s.match(/^([\d.]+)\s*([万亿wWkK])?$/);
+    if (!m) {
+        const n = Number(s.replace(/[^\d.]/g, ''));
+        return Number.isFinite(n) ? n : null;
+    }
+    const base = parseFloat(m[1]);
+    if (!Number.isFinite(base)) return null;
+    const unit = m[2];
+    if (!unit) return Math.round(base);
+    if (unit === '万' || unit === 'w' || unit === 'W') return Math.round(base * 10000);
+    if (unit === '亿') return Math.round(base * 100000000);
+    if (unit === 'k' || unit === 'K') return Math.round(base * 1000);
+    return Math.round(base);
+}
+
+// 从 aweme.snssdk play 直链不需要；这里给抖音构造 stats
+//
+// ⚠️ 关于 hot_list.view_count 的处理（采纳 Astra 的复核意见）：
+//   接口确实会返回这个数值，但它的统计对象、时间范围、是否为累计播放
+//   均未得到验证，不能等同于"真实播放量"。
+//   因此我把它放进独立的 hotListViews 字段并标注"口径未核验"，
+//   绝不填进 play 字段去冒充播放量。
+function buildDouyinStats(statistics, hotListViewCount) {
+    const st = statistics || {};
+    const cells = {
+        like: statCell(st.digg_count, 'statistics.digg_count'),
+        comment: statCell(st.comment_count, 'statistics.comment_count'),
+        collect: statCell(st.collect_count, 'statistics.collect_count'),
+        share: statCell(st.share_count, 'statistics.share_count'),
+        recommend: statCell(st.recommend_count, 'statistics.recommend_count')
+    };
+
+    const missing = [];
+    let note = '';
+
+    // play_count 恒为 0：视为"平台未提供"，而不是"播放量为 0"
+    if (Number(st.play_count) > 0) {
+        cells.play = statCell(st.play_count, 'statistics.play_count');
+    } else {
+        cells.play = null;
+        missing.push('play');
+        note = '当前接口未提供可核验的播放量（抖音 Web 端 play_count 恒为 0），以下为真实互动数据';
+    }
+
+    const stats = buildStats(cells, missing, note);
+
+    // 热榜字段单独给出，明确标注口径未核验
+    const hv = Number(hotListViewCount);
+    if (Number.isFinite(hv) && hv > 0) {
+        stats.hotListViews = { value: hv, source: 'hot_list.view_count', verified: false };
+        stats.note = '抖音 Web 端未下发可核验的播放量；' +
+            '该作品在抖音热榜字段中另有一个数值（见 hotListViews，统计口径未核验，不等同于播放量）';
+    }
+
+    return stats;
+}
+
+// 统一成项目内的标准字段
+function pickDouyinFields(d) {
+    const v = d.video;
+    if (!v) throw new Error('作品详情没有 video 字段（可能是图文作品）');
+
+    let urls = (v.play_addr?.url_list || []).filter(u => /^https?:\/\//.test(u));
+    // play_addr 缺失时，从 bit_rate 列表按码率降序取最高清
+    if (!urls.length && Array.isArray(v.bit_rate)) {
+        const sorted = [...v.bit_rate].sort((a, b) => Number(b.bit_rate || 0) - Number(a.bit_rate || 0));
+        for (const it of sorted) {
+            urls = (it.play_addr?.url_list || []).filter(u => /^https?:\/\//.test(u));
+            if (urls.length) break;
+        }
+    }
+    if (!urls.length) throw new Error('作品详情已返回，但没有可用的 play_addr');
+
+    const cover = [v.cover, v.origin_cover, v.dynamic_cover]
+        .flatMap(x => x?.url_list || [])
+        .find(u => /^https?:\/\//.test(u)) || '';
+
+    const st = d.statistics || {};
+    const desc = d.desc || '';
+    const dur = Number(v.duration ?? d.duration);
+    // 热榜视频会在 hot_list 里带真实播放量
+    const hotListViewCount = d.hot_list?.view_count;
+
+    return {
+        awemeId: d.aweme_id,
+        title: (desc.split('\n')[0] || '(无标题)').slice(0, 120),
+        description: desc,
+        cover,
+        durationMs: Number.isFinite(dur) ? dur : null,
+        author: d.author?.nickname || '',
+        videoUrl: urls[0],
+        videoCandidates: urls,
+        stats: buildDouyinStats(st, hotListViewCount)
+    };
+}
+
+// 抖音解析入口
+async function parseDouyinViaContext(rawInput) {
+    const link = extractDouyinLink(rawInput) || rawInput;
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled',
+            '--lang=zh-CN'
+        ]
+    });
+    try {
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1365, height: 900 });
+        // 必须用桌面 Chromium UA：iPhone UA 会被抖音推向已失效的 H5 SSR/唤端通道，
+        // 而 web detail 接口走的是 PC 通道。
+        await page.setUserAgent(DOUYIN_PC_UA);
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = { runtime: {}, loadTimes: () => { }, csi: () => { } };
+            Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh'] });
+        });
+
+        const awemeId = await resolveDouyinAwemeId(page, link);
+        if (!awemeId) throw new Error('无法解析出 aweme_id，输入: ' + link);
+        console.log(`[抖音快车道] aweme_id = ${awemeId}`);
+
+        // 必须处在 www.douyin.com 同源页面，站点的签名 SDK 才已初始化
+        if (new URL(page.url()).origin !== DOUYIN_ORIGIN) {
+            await page.goto(`https://www.douyin.com/video/${awemeId}`, {
+                waitUntil: 'domcontentloaded', timeout: 30000
+            }).catch(() => { });
+        }
+        // 不用 networkidle（站点会持续上报/轮询，永远不 idle）。
+        // 也不用等到 readyState==='complete'：视频页会一直有流请求，可能要等几十秒。
+        // 正确做法是等"签名运行时已挂载"这个真正的前置条件。
+        await page.waitForFunction(
+            () => typeof window.byted_acrawler !== 'undefined' || typeof window.bdms !== 'undefined',
+            { timeout: 8000 }
+        ).catch(() => { });
+        await new Promise(r => setTimeout(r, 800));
+
+        const detail = await fetchDouyinDetailInPage(page, awemeId);
+        const fields = pickDouyinFields(detail);
+
+        console.log(`[抖音快车道] ✅ 成功: ${fields.title} | 点赞 ${fields.stats.like} 评论 ${fields.stats.comment}`);
+        return fields;
+    } finally {
+        await browser.close().catch(() => { });
+    }
+}
+
+// ============================================================================
+// 快手解析模块（GraphQL 响应嗅探法）
+//
+// 背景：快手 Web 用 Apollo GraphQL，数据不在 DOM（<video src> 是 blob 或空），
+// 也不在 __INITIAL_STATE__（那是 Vue/Nuxt 的约定，快手不用）。
+// 实测：真正的 photo 数据在 POST /graphql 的响应体里，
+//   字段形如 caption / photoUrl / viewCount("29.6万") / likeCount("909") /
+//   realLikeCount(909) / commentCount。
+// 注意 viewCount/likeCount 常是"万"单位的中文字符串，必须解析成数字。
+// ============================================================================
+
+// 解析 "29.6万" / "1574562" / "1.2亿" 这类混合计数的旧实现已合并进 parseCnNumber()
+// （见文件上方"统一统计数据结构"区块）
+
+function extractKuaishouLink(text) {
+    if (!text) return null;
+    const candidates = String(text).match(/https?:\/\/[a-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+/gi) || [];
+    for (const c of candidates) {
+        const cleaned = c.replace(/[.,;!?'")\]]+$/g, '');
+        try {
+            const u = new URL(cleaned);
+            const h = u.hostname;
+            const ok = h === 'kuaishou.com' || h.endsWith('.kuaishou.com')
+                || h === 'gifshow.com' || h.endsWith('.gifshow.com')
+                || h === 'chenzhongtech.com' || h.endsWith('.chenzhongtech.com');
+            if (ok && !u.username && !u.password) return u.href;
+        } catch (e) { }
+    }
+    return null;
+}
+
+// 从快手 GraphQL 返回的任意 JSON 里递归找"最像主视频"的节点
+function findKuaishouPhoto(obj, seen = new Set()) {
+    if (!obj || typeof obj !== 'object' || seen.has(obj)) return null;
+    seen.add(obj);
+
+    // 命中条件：同时具备 视频地址 与 播放/点赞 任一
+    const hasVideo = obj.photoUrl || (Array.isArray(obj.mainMvUrls) && obj.mainMvUrls.length)
+        || obj.manifest || obj.adaptationSet;
+    const hasCount = obj.viewCount != null || obj.likeCount != null || obj.realLikeCount != null;
+    if (hasVideo && (hasCount || obj.caption)) return obj;
+
+    for (const k of Object.keys(obj)) {
+        const v = obj[k];
+        if (v && typeof v === 'object') {
+            const found = findKuaishouPhoto(v, seen);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+function pickKuaishouFields(photo) {
+    // 视频直链：优先 photoUrl（无水印/无标清降级），其次 mainMvUrls
+    let videoUrl = photo.photoUrl || '';
+    if (!videoUrl && Array.isArray(photo.mainMvUrls) && photo.mainMvUrls[0]) {
+        videoUrl = photo.mainMvUrls[0].url || '';
+    }
+    if (!videoUrl && photo.manifest) {
+        try {
+            const mf = typeof photo.manifest === 'string' ? JSON.parse(photo.manifest) : photo.manifest;
+            const ad = mf?.adaptationSet?.[0];
+            videoUrl = ad?.representation?.[0]?.url || ad?.representation?.[0]?.backupUrl?.[0] || '';
+        } catch (e) { }
+    }
+
+    const caption = photo.caption || '';
+    return {
+        title: (caption.split('\n')[0] || '(无标题)').slice(0, 120),
+        description: caption,
+        cover: photo.coverUrl || (Array.isArray(photo.coverUrls) && photo.coverUrls[0]?.url) || '',
+        author: photo.userName || photo.user?.name || photo.originUserName || '',
+        durationMs: photo.duration || 0,
+        videoUrl,
+        stats: buildKuaishouStats(photo)
+    };
+}
+
+// 快手统计：viewCount 是真实播放量（常为 "29.6万" 中文字符串），
+// 评论数在 VisionVideoDetailPhoto 上不存在，需要 commentListQuery 的 commentCountV2
+function buildKuaishouStats(photo, commentCountFromApi) {
+    const cells = {
+        play: statCell(parseCnNumber(photo.viewCount ?? photo.playCount), 'photo.viewCount'),
+        like: statCell(parseCnNumber(photo.realLikeCount ?? photo.likeCount), 'photo.realLikeCount')
+    };
+
+    const missing = [];
+    // 评论数：优先用 commentListQuery 返回的 commentCountV2
+    const cc = parseCnNumber(commentCountFromApi);
+    if (cc !== null && cc >= 0) {
+        cells.comment = statCell(cc, 'commentListQuery.commentCountV2');
+    } else {
+        cells.comment = null;
+        missing.push('comment');
+    }
+
+    // 快手 GraphQL 的 VisionVideoDetailPhoto 类型没有收藏/分享字段
+    missing.push('collect', 'share');
+
+    return buildStats(cells, missing, '快手 Web 端不提供收藏与分享数');
+}
+
+// 用页面自身的签名环境调用 commentListQuery（直接拼 query 会触发 Need captcha）
+async function fetchKuaishouCommentCount(page, photoId) {
+    try {
+        const result = await page.evaluate(async (pid) => {
+            // 用与站点一致的 query 结构（page 参数不合法会报 Unknown argument，故不传）
+            const query = `query commentListQuery($photoId: String, $pcursor: String) {
+                visionCommentList(photoId: $photoId, pcursor: $pcursor) {
+                    commentCount
+                    commentCountV2
+                    pcursor
+                }
+            }`;
+            try {
+                const r = await fetch('/graphql', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        operationName: 'commentListQuery',
+                        variables: { photoId: pid, pcursor: '' },
+                        query
+                    })
+                });
+                const t = await r.text();
+                const j = JSON.parse(t);
+                const v = j.data?.visionCommentList;
+                return v ? { commentCount: v.commentCount, commentCountV2: v.commentCountV2 } : null;
+            } catch (e) {
+                return null;
+            }
+        }, photoId);
+
+        if (!result) return null;
+        // commentCount 常为 null，真正的数字在 commentCountV2
+        return result.commentCountV2 ?? result.commentCount ?? null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function parseKuaishouViaGraphQL(rawInput) {
+    const link = extractKuaishouLink(rawInput) || rawInput;
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled',
+            '--lang=zh-CN'
+        ]
+    });
+    try {
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1440, height: 900 });
+        await page.setUserAgent(DOUYIN_PC_UA);
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = { runtime: {}, loadTimes: () => { }, csi: () => { } };
+            Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh'] });
+        });
+
+        // 收集所有 /graphql 响应体
+        const gqlBodies = [];
+        page.on('response', async (response) => {
+            const u = response.url();
+            if (!u.includes('/graphql')) return;
+            try {
+                const txt = await response.text();
+                if (txt && txt.length > 120) gqlBodies.push(txt);
+            } catch (e) { }
+        });
+
+        console.log(`[快手快车道] 打开页面: ${link}`);
+        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(e => {
+            console.log('[快手快车道] 页面加载异常（继续尝试抓取已有响应）:', e.message);
+        });
+
+        // 轮询等待 GraphQL 数据回填（比固定 sleep 更快也更能应对慢响应）
+        const deadline = Date.now() + 20000;
+        let best = null;
+        while (Date.now() < deadline) {
+            for (const body of gqlBodies) {
+                let json;
+                try { json = JSON.parse(body); } catch (e) { continue; }
+                const photo = findKuaishouPhoto(json);
+                if (!photo) continue;
+                // 选字段最全的那个节点
+                const score = ['photoUrl', 'viewCount', 'likeCount', 'caption', 'commentCount']
+                    .filter(k => photo[k] != null && photo[k] !== '').length;
+                if (!best || score > best.score) best = { photo, score };
+            }
+            // 拿到带视频地址 + 统计的节点就提前结束
+            if (best && best.photo.photoUrl && best.score >= 4) break;
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        console.log(`[快手快车道] 捕获 GraphQL 响应 ${gqlBodies.length} 条`);
+        if (!best) throw new Error('未从 GraphQL 响应中定位到视频节点');
+
+        const fields = pickKuaishouFields(best.photo);
+        if (!fields.videoUrl) throw new Error('未取到视频直链');
+
+        // 补评论数：commentCount 在 photo 节点上是 null，必须单独查 commentListQuery
+        const photoId = best.photo.id || (link.match(/short-video\/([a-zA-Z0-9]+)/) || [])[1];
+        if (photoId) {
+            const cc = await fetchKuaishouCommentCount(page, photoId);
+            if (cc !== null) {
+                fields.stats = buildKuaishouStats(best.photo, cc);
+                console.log(`[快手快车道] 评论数 = ${cc}（来源 commentCountV2）`);
+            }
+        }
+
+        console.log(`[快手快车道] ✅ 成功: ${fields.title} | 播放 ${fields.stats.play} 点赞 ${fields.stats.like} 评论 ${fields.stats.comment}`);
+        return fields;
+    } finally {
+        await browser.close().catch(() => { });
+    }
+}
+
+// ============================================================================
+// 小红书解析模块（__INITIAL_STATE__ + 媒体流嗅探）
+//
+// 关键前提：链接必须带 xsec_token，否则页面直接跳 404（error_code=300031）。
+// 数据位置：window.__INITIAL_STATE__.note.noteDetailMap[id].note
+//   interactInfo.likedCount / commentCount / collectedCount / shareCount
+//   —— 注意都是中文字符串（"4.2万"），要解析
+// 视频直链：状态树是 MobX 深层嵌套不可靠，改用 page.on('response')
+//   嗅探 content-type: video/mp4 的响应（sns-video-v3.xhscdn.com/stream/...）
+//   document.querySelector('video').src 是 blob:，不可用
+// ============================================================================
+
+function extractXhsLink(text) {
+    if (!text) return null;
+    const candidates = String(text).match(/https?:\/\/[a-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+/gi) || [];
+    for (const c of candidates) {
+        // xsec_token 里可能含 = ，只在结尾做最小裁剪
+        const cleaned = c.replace(/[.,;!?'")\]]+$/g, '');
+        try {
+            const u = new URL(cleaned);
+            const h = u.hostname;
+            const ok = h === 'xiaohongshu.com' || h.endsWith('.xiaohongshu.com')
+                || h === 'xhslink.com' || h.endsWith('.xhslink.com');
+            if (ok && !u.username && !u.password) return cleaned;
+        } catch (e) { }
+    }
+    return null;
+}
+
+function buildXhsStats(interactInfo) {
+    const ii = interactInfo || {};
+    return buildStats({
+        like: statCell(parseCnNumber(ii.likedCount), 'interactInfo.likedCount'),
+        comment: statCell(parseCnNumber(ii.commentCount), 'interactInfo.commentCount'),
+        collect: statCell(parseCnNumber(ii.collectedCount), 'interactInfo.collectedCount'),
+        share: statCell(parseCnNumber(ii.shareCount), 'interactInfo.shareCount')
+    }, ['play'], '小红书不公开播放量，此处为真实互动数据');
+}
+
+async function parseXhsViaState(rawInput) {
+    const link = extractXhsLink(rawInput) || rawInput;
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled',
+            '--lang=zh-CN'
+        ]
+    });
+    try {
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1440, height: 900 });
+        await page.setUserAgent(DOUYIN_PC_UA);
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = { runtime: {}, loadTimes: () => { }, csi: () => { } };
+            Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        });
+
+        // 嗅探媒体流：以 content-type: video/* 为准，避免把封面图误判成视频
+        const mediaUrls = [];
+        page.on('response', (resp) => {
+            try {
+                const ct = resp.headers()['content-type'] || '';
+                const u = resp.url();
+                if (ct.includes('video/') || (/xhscdn\.com/.test(u) && /\.mp4(\?|$)/.test(u) && !/\.(jpg|jpeg|png|webp)/.test(u))) {
+                    if (!mediaUrls.includes(u)) mediaUrls.push(u);
+                }
+            } catch (e) { }
+        });
+
+        console.log(`[小红书] 打开页面: ${link.slice(0, 90)}`);
+        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(e => {
+            console.log('[小红书] 页面加载异常:', e.message);
+        });
+        await new Promise(r => setTimeout(r, 6000));
+
+        const state = await page.evaluate(() => {
+            const st = window.__INITIAL_STATE__;
+            if (!st) return null;
+            const map = st.note && st.note.noteDetailMap;
+            if (!map) return null;
+            const key = Object.keys(map)[0];
+            const n = key && map[key] && map[key].note;
+            if (!n || !n.noteId) return null;
+
+            // 顺便在状态树里兜底找视频地址（不作为主路径）
+            let fallbackUrl = '';
+            (function walk(o, depth) {
+                if (!o || typeof o !== 'object' || depth > 10 || fallbackUrl) return;
+                for (const k of Object.keys(o)) {
+                    const v = o[k];
+                    if (typeof v === 'string' && /^https?.*(?:sns-video|\.mp4)/.test(v) && !/\.(jpg|png|webp)/.test(v)) {
+                        fallbackUrl = v; return;
+                    }
+                    if (v && typeof v === 'object') walk(v, depth + 1);
+                }
+            })(n, 0);
+
+            return {
+                noteId: n.noteId,
+                type: n.type,
+                title: n.title || '',
+                desc: n.desc || '',
+                user: n.user && n.user.nickname || '',
+                interactInfo: n.interactInfo || null,
+                cover: (n.imageList && n.imageList[0] && (n.imageList[0].urlDefault || n.imageList[0].url)) || '',
+                fallbackVideoUrl: fallbackUrl
+            };
+        });
+
+        if (!state) {
+            throw new Error('未从 __INITIAL_STATE__ 取到笔记数据（链接可能缺少 xsec_token，或笔记已删除）');
+        }
+
+        console.log(`[小红书] type=${state.type} | 互动: ${JSON.stringify(state.interactInfo)}`);
+
+        // 选视频地址：优先嗅探到的第一条 mp4
+        let videoUrl = mediaUrls[0] || state.fallbackVideoUrl || '';
+        console.log(`[小红书] 嗅探到 ${mediaUrls.length} 条媒体流`);
+
+        // 图文笔记没有视频流，但互动数据依然是真实有效的，照样返回
+        const isImageNote = state.type !== 'video' && !videoUrl;
+        if (isImageNote) {
+            console.log(`[小红书] 这是图文笔记（type=${state.type}），无视频流，仅返回图文数据与互动统计`);
+        }
+
+        const title = (state.title || state.desc.split('\n')[0] || '(无标题)').slice(0, 120);
+        return {
+            noteId: state.noteId,
+            noteType: state.type,
+            isImageNote,
+            title,
+            description: state.desc || state.title || '',
+            cover: state.cover,
+            author: state.user,
+            durationMs: null,
+            videoUrl: videoUrl || '',
+            videoCandidates: mediaUrls.slice(0, 3),
+            stats: buildXhsStats(state.interactInfo)
+        };
+    } finally {
+        await browser.close().catch(() => { });
+    }
+}
+
 // 核心自研技术：无头浏览器网络层嗅探
 app.post('/api/parse', authenticate, async (req, res) => {
     let { url, apiKey, endpointId, accessKey } = req.body;
@@ -1043,6 +1813,85 @@ app.post('/api/parse', authenticate, async (req, res) => {
             return res.status(403).json({ error: 'KEY_REQUIRED', message: '解析此海外平台视频需要正确的外网访问密钥！' });
         }
         console.log(`[密钥验证] 校验通过，允许解析海外平台视频`);
+    }
+
+    // ⚡ 抖音专用快车道：页面上下文签名 + web/aweme/detail/
+    // 根因说明：抖音 Web 的 detail 接口受 ArgusSecurityPlugin 保护，校验 a_bogus 签名参数，
+    // node 侧 axios 即使带全套 cookie 也返回 403 "Uifid Not Found"。
+    // 唯一稳定做法是在 www.douyin.com 同源页面里发 fetch，让抖音自己的 webmssdk 运行时补签名。
+    if (/douyin\.com/.test(url)) {
+        try {
+            const douyinResult = await parseDouyinViaContext(url);
+            if (douyinResult && douyinResult.videoUrl) {
+                addLog(req.user.username, req.user.role, '解析并提取视频', url);
+                return res.json({
+                    success: true,
+                    videoUrl: douyinResult.videoUrl,
+                    targetUrl: url,
+                    title: douyinResult.title,
+                    cover: douyinResult.cover,
+                    platform: '抖音',
+                    description: douyinResult.description || '暂无详细描述文案',
+                    author: douyinResult.author,
+                    duration: douyinResult.durationMs,
+                    stats: douyinResult.stats,
+                    hotListViews: douyinResult.stats?.hotListViews || null
+                });
+            }
+        } catch (e) {
+            console.warn(`[抖音快车道] 失败，降级到通用 puppeteer 嗅探:`, e.message);
+        }
+    }
+
+    // ⚡ 快手快车道：GraphQL 响应嗅探（快手有真实播放量 viewCount）
+    if (/(?:kuaishou|gifshow|chenzhongtech)\.com/.test(url)) {
+        try {
+            const ksResult = await parseKuaishouViaGraphQL(url);
+            if (ksResult && ksResult.videoUrl) {
+                addLog(req.user.username, req.user.role, '解析并提取视频', url);
+                return res.json({
+                    success: true,
+                    videoUrl: ksResult.videoUrl,
+                    targetUrl: url,
+                    title: ksResult.title,
+                    cover: ksResult.cover,
+                    platform: '快手',
+                    description: ksResult.description || '暂无详细描述文案',
+                    author: ksResult.author,
+                    duration: ksResult.durationMs,
+                    stats: ksResult.stats
+                });
+            }
+        } catch (e) {
+            console.warn(`[快手快车道] 失败，降级到通用 puppeteer 嗅探:`, e.message);
+        }
+    }
+
+    // ⚡ 小红书快车道：__INITIAL_STATE__ + 媒体流嗅探
+    // 图文笔记（type=normal）没有视频流，但它的互动统计是真实的，同样返回给前端展示
+    if (/(?:xiaohongshu|xhslink)\.com/.test(url)) {
+        try {
+            const xhsResult = await parseXhsViaState(url);
+            if (xhsResult) {
+                addLog(req.user.username, req.user.role, '解析并提取视频', url);
+                return res.json({
+                    success: true,
+                    videoUrl: xhsResult.videoUrl || '',
+                    targetUrl: url,
+                    title: xhsResult.title,
+                    cover: xhsResult.cover,
+                    platform: '小红书',
+                    description: xhsResult.description || '暂无详细描述文案',
+                    author: xhsResult.author,
+                    duration: xhsResult.durationMs,
+                    noteType: xhsResult.noteType,
+                    isImageNote: xhsResult.isImageNote,
+                    stats: xhsResult.stats
+                });
+            }
+        } catch (e) {
+            console.warn(`[小红书] 失败，降级到通用 puppeteer 嗅探:`, e.message);
+        }
     }
 
     // 1. 如果是 B站 链接，先尝试通过直接 API 获取，避免启动无头浏览器（极速且稳定）
@@ -1149,6 +1998,19 @@ app.post('/api/parse', authenticate, async (req, res) => {
                         // 净化空白字符，但保留完整段落和换行以维持可读性
                         rawExtractText = rawExtractText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 
+                        // ⚡ 补上一直漏读的播放量数据：B站 view 接口的 data.stat
+                        const biliStat = videoData.stat || {};
+                        const biliStats = buildStats({
+                            play: statCell(biliStat.view, 'stat.view'),
+                            danmaku: statCell(biliStat.danmaku, 'stat.danmaku'),
+                            like: statCell(biliStat.like, 'stat.like'),
+                            comment: statCell(biliStat.reply, 'stat.reply'),
+                            collect: statCell(biliStat.favorite, 'stat.favorite'),
+                            coin: statCell(biliStat.coin, 'stat.coin'),
+                            share: statCell(biliStat.share, 'stat.share')
+                        });
+                        console.log(`[B站直接解析] 播放量 ${biliStat.view} | 点赞 ${biliStat.like} | 评论 ${biliStat.reply}`);
+
                         addLog(req.user.username, req.user.role, '解析并提取视频', url);
                         return res.json({
                             success: true,
@@ -1157,7 +2019,10 @@ app.post('/api/parse', authenticate, async (req, res) => {
                             title: title,
                             cover: cover,
                             platform: 'Bilibili',
-                            description: rawExtractText || '暂无详细描述文案'
+                            description: rawExtractText || '暂无详细描述文案',
+                            author: videoData.owner?.name || '',
+                            duration: (videoData.duration || 0) * 1000, // 统一为毫秒
+                            stats: biliStats
                         });
                     }
                 }
@@ -1286,6 +2151,9 @@ app.post('/api/parse', authenticate, async (req, res) => {
             const reqUrl = response.url();
 
             // 1. 拦截抖音 API
+            // ⚠️ 补充：原代码在 videoSrc 拿到后没有调用 resolveIntercept()，
+            // 导致即使嗅探成功，外部 await Promise.race([interceptPromise, navPromise])
+            // 仍可能一直等到 navPromise 超时才继续，白白多等十几秒。
             if (reqUrl.includes('/aweme/detail/') || reqUrl.includes('/aweme/post/') || reqUrl.includes('/aweme/iteminfo/')) {
                 try {
                     const json = await response.json();
@@ -1834,24 +2702,18 @@ app.post('/api/parse', authenticate, async (req, res) => {
             }
         }
 
-        // ⚡ 极客核心去水印与去片尾逻辑
+        // ⚡ 去水印逻辑
+        // ⚠️ 重要修正：不要再对 douyinvod CDN 直链 set('ratio','1080p')。
+        // 该直链的 x-expires / x-signature 等字段相互绑定，任意增删 query 参数
+        // 都可能直接触发 403；而清晰度是由 play_addr 下发时就已经决定的，
+        // 前端拼 ratio 并不会真的提升画质。真要换清晰度，应从 bit_rate 列表里挑。
         if (videoSrc) {
             if (videoSrc.includes('douyin.com') || videoSrc.includes('iesdouyin.com') || videoSrc.includes('aweme.snssdk.com') || videoSrc.includes('douyinvod.com')) {
-                // 1. 强制将带水印的 playwm 替换为无水印无片尾的 play
+                // 仅处理老式 /playwm/ 带水印路径（这是路径，不是 query 参数，替换是安全的）
                 if (videoSrc.includes('/playwm/')) {
                     videoSrc = videoSrc.replace('/playwm/', '/play/');
-                    console.log(`[去水印优化] 已成功将抖音 playwm 链接替换为无水印 play 直链: ${videoSrc}`);
+                    console.log(`[去水印优化] 已将 playwm 路径替换为无水印 play 路径`);
                 }
-
-                // 2. 移除 water_mark 参数，强制 1080p 超清画质
-                try {
-                    const parsed = new URL(videoSrc);
-                    if (parsed.searchParams.has('water_mark')) {
-                        parsed.searchParams.delete('water_mark');
-                    }
-                    parsed.searchParams.set('ratio', '1080p');
-                    videoSrc = parsed.toString();
-                } catch (e) { }
             }
         }
 
@@ -2194,8 +3056,11 @@ app.get('/api/download', authenticate, async (req, res) => {
             downloadHeaders['Referer'] = 'https://www.bilibili.com';
             downloadHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
         } else if (isDouyin) {
+            // ⚠️ 实测结论（2026）：douyinvod / snssdk CDN 现在强制校验 Referer。
+            // 不带 Referer => 403 text/html；带 https://www.douyin.com/ => 200 video/mp4。
+            // 旧代码这里刻意抹掉 Referer，是抖音"解析出来却下载不了"的直接原因。
+            downloadHeaders['Referer'] = 'https://www.douyin.com/';
             downloadHeaders['User-Agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
-            // Do not provide Referer header (must be empty/removed for Douyin CDN)
         } else if (isXhs) {
             downloadHeaders['Referer'] = 'https://www.xiaohongshu.com';
             downloadHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';

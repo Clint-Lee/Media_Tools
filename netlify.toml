@@ -1,0 +1,21 @@
+# VidFetch Ultra - Netlify 部署配置文件
+
+[build]
+  # 仅构建前端，避免拉取和安装庞大的后端依赖（如 Puppeteer/Chrome）
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+# 1. 接口反向代理：将前端对 /api/* 的请求无缝代理到真实的后端服务器
+# 请将下面的 IP 地址替换为您实际部署 Express 后端的公网服务器 IP/域名及端口
+[[redirects]]
+  from = "/api/*"
+  to = "http://YOUR_BACKEND_SERVER_IP:3000/api/:splat"
+  status = 200
+  force = true
+
+# 2. 单页应用 (SPA) 路由兜底：保证刷新页面时不会发生 404 错误
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
