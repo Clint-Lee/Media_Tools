@@ -2,7 +2,8 @@
 require('../lib/env');
 const fs=require('fs'),path=require('path'),axios=require('axios'),sources=require('../lib/live-sources');
 (async()=>{
-    const response=await fetch('http://127.0.0.1:4000/api/trends?platform=douyin&final=1',{signal:AbortSignal.timeout(45000)});
+    const base=process.env.TEST_BASE_URL || 'http://127.0.0.1:4000';
+    const response=await fetch(base+'/api/trends?platform=douyin&final=1',{signal:AbortSignal.timeout(45000)});
     const data=await response.json(),video=data.list?.[0];
     if(!video || !/^\d{15,22}$/.test(video.id))throw new Error('先取得真实抖音作品，不能使用虚构ID探查');
     const results=[];

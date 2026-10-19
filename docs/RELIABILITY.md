@@ -1,5 +1,7 @@
 # 真实数据与媒体处理：运行、验收和边界
 
+> 当前接续见 [2026-10-19 指标与验收](HANDOFF_2026-10-19_METRICS.md)。下方历史媒体样本不代表本轮重新验收；当前默认播放榜、用户显式切换点赞，抖音/小红书仍缺可核验匿名播放量。
+
 ## 2026-10-16 可恢复采集索引
 
 实时视频采集成功后，将作品公开元数据保存在 `.cache/collected-videos/<platform>.json`（`HOTPOT_COLLECTION_DIR` 可覆盖），与30分钟实时快照分离。入口“已采集记录”与 `/api/collected-videos` 只查询本机索引，不触发平台抓取；指标为最新一次实际采集值，逐卡标注历史采集时间，不承诺旧作品仍可播放。当前索引不保存搜索词、请求头、Cookie或媒体直链，不从旧素材池补数。
@@ -62,6 +64,7 @@ npm start
 | `BILIBILI_COOKIE` / `DOUYIN_COOKIE` | 本人合法登录态。通过服务进程环境设置，不提交到 Git，不填写到普通视频搜索框。 |
 | `TIKTOK_COOKIE` / `XIAOHONGSHU_COOKIE` / `KUAISHOU_COOKIE` | 运营者可选合法授权高级配置，不是用户使用前提。匿名发现/公开搜索路径不注入个人Cookie；不能绕过验证码或私密权限。 |
 | `YOUTUBE_API_KEY` | 官方 YouTube Data API 凭证，启用后使用官方分类/精确发布时间/详情播放量和分页。注意平台配额，搜索调用有成本。 |
+| `HOTPOT_YOUTUBE_METRICS_DIR` | 匿名watch公开指标的本地缓存目录，默认 `.cache/youtube-public-metrics`；五分钟TTL、最多500件、保留原始观测时间。只保存公开计数及证据，不存HTML、媒体地址或技术会话；单实例使用。未设置官方Key时自动启用，无需终端用户登录。 |
 | `X_BEARER_TOKEN` / `X_SEARCH_ARCHIVE` | X官方凭证与历史检索开关。历史检索需对应权限及额度，开关设1才请求历史接口；没有权限不替代成近7天“历史榜”。 |
 | `MEDIA_PROXY` | 显式代理优先于自动检测，先初始化再监听端口。兼容本机Fake-IP时仅已知平台CDN可走配置代理；其它域名仍校验公网DNS。全局代理修改仅管理员可执行。 |
 | `MEDIA_COOKIES_FILE` | yt-dlp 的 Netscape 格式 Cookie 文件，按其原始文档配置；不要放入可公开静态目录。 |

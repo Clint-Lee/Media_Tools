@@ -58,6 +58,35 @@ const app = require('../server');
         assert.equal(likes.data.ranking.ranked,2,'真实零点赞也有明确指标');
         assert.equal(likes.data.dataQuality.rankingMetric,'likes');
         assert.equal((await get('/api/trends?sort=invalid')).status,400);
+        const notes=require('../lib/youtube-public'),originalNotes={...notes},originalGetVideos=sources.getVideos;
+        const originalKey=process.env.YOUTUBE_API_KEY;
+        let release;
+        const gate=new Promise(resolve=>{release=resolve;});
+        const youtubeRow={id:'abcdefghijk',platform:'youtube',title:'匿名详情隔离用例',playRaw:10,likeRaw:null,fetchedAt:Date.now()-1000,isCached:true};
+        const detail={videoDetails:{videoId:youtubeRow.id,viewCount:'1000',title:youtubeRow.title}};
+        const initial={currentVideoEndpoint:{watchEndpoint:{videoId:youtubeRow.id}},contents:{videoPrimaryInfoRenderer:{likeCountEntity:{likeCountIfIndifferentNumber:'10'}}}};
+        const youtubeClient=notes.createClient({directory:null,http:{get:async()=>{
+            await gate;return {data:'ytInitialPlayerResponse = '+JSON.stringify(detail)+'; ytInitialData = '+JSON.stringify(initial)+';'};
+        }}});
+        try {
+            delete process.env.YOUTUBE_API_KEY;
+            Object.assign(notes,youtubeClient);
+            sources.getVideos=async()=>({source:'youtube:public-search',message:'隔离详情验证',list:[youtubeRow]});
+            const background=await get('/api/trends?platform=youtube');
+            assert.equal(background.data.list[0].playRaw,10,'播放榜首屏不等待watch请求');
+            assert.equal(background.data.metricEnrichment.pending,1);
+            release();await youtubeClient.enrich([youtubeRow]);
+            const supplemented=await get('/api/trends?platform=youtube&sort=likes');
+            assert.equal(supplemented.data.list[0].likeRaw,10);
+            assert.equal(supplemented.data.list[0].playRaw,1000);
+            assert.equal(supplemented.data.list[0].isCached,true,'补指标不能冒充列表刚刚采集');
+            assert.equal(supplemented.data.list[0].fetchedAt,youtubeRow.fetchedAt);
+            assert.equal(supplemented.data.list[0].likeSource,'youtube:public-watch');
+            assert.equal(supplemented.data.metricEnrichment.pending,0);
+        }finally {
+            release();Object.assign(notes,originalNotes);sources.getVideos=originalGetVideos;
+            if(originalKey===undefined)delete process.env.YOUTUBE_API_KEY;else process.env.YOUTUBE_API_KEY=originalKey;
+        }
         assert.equal(r.data.scope.exhaustive, false); assert.equal(r.data.nextCursor, 'real-next');
         assert.equal(r.data.hasMore, true); assert.equal(r.data.coverage.candidates, 2);
         await get('/api/search?platform=bilibili&query=AI&page=2&cursor=next');

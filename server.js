@@ -633,12 +633,13 @@ async function supplementPublicMetrics(result,options) {
     const notes=require('./lib/youtube-public');
     if(options.sortBy==='likes')await notes.enrich(result.list);
     else notes.enrich(result.list).catch(()=>{});
-    const list=notes.apply(result.list),pending=notes.pendingCount(result.list)>0;
+    const list=notes.apply(result.list),pending=notes.pendingCount(result.list)>0,metricEnrichment=notes.status();
     let collection=result.collection;
     if(list.some((video,i)=>video!==result.list[i]))try {collection=require('./lib/collection-index').record('youtube',list,options);}
     catch(error){collection={status:'write-failed',message:error.message};}
-    return {...result,list,collection,refreshing:result.refreshing || pending,
-        message:result.message+' 可访问作品的原站详情补充精确播放与公开点赞，不取“点赞后人数”。'+(pending?' 详情正在后台补充，可稍后刷新查看。':'')};
+    return {...result,list,collection,metricEnrichment,refreshing:result.refreshing || pending,
+        message:result.message+' 可访问作品的原站详情补充精确播放与公开点赞，不取“点赞后人数”。'+(pending?' 详情正在后台补充，可稍后刷新查看。':'')
+            +(['read-failed','write-failed'].includes(metricEnrichment.storage)?' 详情磁盘缓存不可用，仍可使用本次内存观测。':'')};
 }
 
 app.get('/api/platforms', (req, res) => { res.setHeader('Cache-Control','no-store'); res.json({ success:true, list:require('./lib/platform-rankings').capabilities().map(p=>({...p,verification:liveSources.getSourceStatus(p.platform)})) }); });
@@ -674,6 +675,7 @@ async function handleLiveVideos(req, res) {
             source: result.source, sourceMessage: result.message, partial: result.partial || false,
             hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false, refreshing:result.refreshing || false,
             fetchedAt: result.list[0]?.fetchedAt || Date.now(), collection: result.collection,
+            metricEnrichment:result.metricEnrichment,
             dataQuality: require('./lib/data-quality').videoDataQuality(result.list, {...result,sortBy:options.sortBy})
         });
     } catch (error) {
