@@ -60,7 +60,7 @@ sources.withPage=async(platform,worker,options)=>{
     return worker({goto:async target=>{
         navigated.push(target);await gate;
         const id=new URL(target).pathname.split('/').pop(),returned=id===ids[2]?ids[3]:id;
-        return {ok:()=>true,text:async()=>'<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{[id]:{note:{noteId:returned,title:'原笔记',time:now,desc:'原始正文',interactInfo:{likedCount:'10万+',commentCount:'3702',collectedCount:'7915',shareCount:'4250'}}}}}})+';</script>'};
+        return {ok:()=>true,text:async()=>'<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{[id]:{note:{noteId:returned,type:'video',title:'原笔记',time:now,desc:'原始正文',interactInfo:{likedCount:'10万+',commentCount:'3702',collectedCount:'7915',shareCount:'4250'}}}}}})+';</script>'};
     }});
 };
 
@@ -82,6 +82,7 @@ sources.withPage=async(platform,worker,options)=>{
     assert.equal(result.list[0].likePrecision,'lower-bound');assert.equal(result.list[0].likeLowerBound,100000);
     assert.equal(result.list[0].commentCount,3702);assert.equal(result.list[0].collectCount,7915);assert.equal(result.list[0].shareCount,4250);
     assert.equal(result.list[0].playRaw,null,'笔记互动不能冒充视频播放');
+    assert.equal(result.list[0].viewEvidence.status,'not-provided','记录实际详情核验结果，不只剩一个空数字');
     console.log('Metric evidence passed: exact/rounded/lower-bound counts, nulls, restart precision, V2 stats and identity-verified bounded anonymous notes');
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{
     sources.withPage=originalWithPage;browser.lightweightPage=originalLightweight;axios.get=originalGet;

@@ -948,6 +948,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 metricLabel=state.sortBy==='likes'?'点赞':'播放';
                 displayMetric=metricText(video,state.sortBy);
                 statTooltip = '本次数据未提供当前排行指标，不参与名次';
+                if(state.sortBy==='views') {
+                    const reasons={'placeholder-zero':'原站返回零占位，不能当作真实零播放',
+                        'aggregate-interactions':'原站此数为点赞、收藏与评论合计，已拒绝作为播放量',
+                        'unverified-schema':'原站结构化计数尚无独立播放证据，未用于排名',
+                        'identity-mismatch':'计数作品编号不匹配，未用于排名','not-provided':'已核对原站详情，未提供可核验播放量'};
+                    if(reasons[video.viewEvidence?.status])statTooltip=reasons[video.viewEvidence.status]+' · 不参与播放排名';
+                }
                 if((hasLikes || video.likeLowerBound!=null) && state.sortBy==='views')secondaryMetricHtml=`<div class="card-secondary-metric">${escapeHtml(metricText(video,'likes'))} 点赞 · 辅助指标，不用于播放排名</div>`;
             }
 

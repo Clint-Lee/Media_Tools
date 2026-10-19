@@ -30,7 +30,7 @@ assert.equal(groupAnalysisLines(transcript.transcript)[0].text, transcript.plain
 assert.equal(collectAwemes({word_list:[{group_id:'999999',word:'话题'}]}).length,0,'话题ID不能作为视频ID');
 const video = douyinVideo({aweme_id:'123',desc:'视频',author:{nickname:'作者'},video:{cover:{url_list:['https://example.com/actual.jpg']}},create_time:100,statistics:{digg_count:456}});
 assert.equal(video.metricRaw,null); assert.equal(video.playRaw,null); assert.equal(video.likeRaw,456);
-assert.equal(douyinVideo({aweme_id:'124',desc:'真实播放计数',author:{nickname:'作者'},video:{},statistics:{play_count:1000,digg_count:30}}).playRaw,1000);
+assert.equal(douyinVideo({aweme_id:'7697507167225580836',desc:'真实播放计数',author:{nickname:'作者'},video:{},statistics:{play_count:1000,digg_count:30}}).playRaw,1000);
 assert.equal(douyinVideo({aweme_id:'125',desc:'隐藏字段零占位',author:{nickname:'作者'},video:{},statistics:{play_count:0,digg_count:30}}).playRaw,null);
 assert.equal(video.id,'123'); assert.equal(video.cover,'https://example.com/actual.jpg');
 const geo = aggregateGeo([{id:'1',title:'上海技术视频'},{id:'2',title:'无城市'},{id:'3',title:'上海探店'}]);
