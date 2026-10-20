@@ -24,7 +24,7 @@ let sources=require('../lib/live-sources');
         browserCalls++;assert.equal(options.anonymous,true,'公开榜单不得注入保存的个人登录Cookie');
         return {list:[{id:'7123456789012345678',title:'隔离匿名发现用例',platform:'tiktok',playRaw:123,source:'isolated:fixture'}],hasMore:false};
     }});
-    assert.equal(browserCalls,3,'无登录凭证也必须尝试公开发现、标签视频和官方Creative Center');assert.equal(publicResult.list[0].playRaw,123);
+    assert.equal(browserCalls,2,'无登录凭证也必须尝试公开发现与标签视频；Creative Center 话题榜走公开 HTTP 接口，不占浏览器上下文');assert.equal(publicResult.list[0].playRaw,123);
     // 分区切换之后才到达的旧推荐响应，不能被归为新分区。
     const browser=require('../lib/public-browser'), savedBrowser={...browser};
     const discovery=require('../lib/public-discovery'),originalTag=discovery.tiktokTagPool;

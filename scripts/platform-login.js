@@ -17,7 +17,15 @@ if (!sessions.PLATFORMS[platform]) {
         const settings=await (await fetch('http://127.0.0.1:'+(process.env.PORT || 4000)+'/api/settings',{signal:AbortSignal.timeout(1500)})).json();
         if(settings.proxy && /^https?:\/\//.test(settings.proxy))proxy=settings.proxy;
     } catch { /* 服务未启动时使用浏览器系统网络设置，仍可显式设置MEDIA_PROXY。 */ }
-    const browser=await puppeteer.launch({headless:false,userDataDir:path.join(__dirname,'..','.runtime','platform-logins',platform),
+    // 优先使用本机已安装的 Chrome，与 lib/live-sources.js 的解析顺序一致。
+    const fs=require('fs');
+    const chromeCandidates=[process.env.PUPPETEER_EXECUTABLE_PATH,
+        process.env['ProgramFiles'] && process.env['ProgramFiles']+'\\Google\\Chrome\\Application\\chrome.exe',
+        process.env['ProgramFiles(x86)'] && process.env['ProgramFiles(x86)']+'\\Google\\Chrome\\Application\\chrome.exe',
+        process.env.LOCALAPPDATA && process.env.LOCALAPPDATA+'\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'].filter(Boolean);
+    const executablePath=chromeCandidates.find(candidate=>fs.existsSync(candidate));
+    const browser=await puppeteer.launch({headless:false,...(executablePath?{executablePath}:{}),userDataDir:path.join(__dirname,'..','.runtime','platform-logins',platform),
         args:['--disable-setuid-sandbox',...(['tiktok','youtube'].includes(platform) && proxy?['--proxy-server='+proxy]:[])]});
     const prompt=readline.createInterface({input:process.stdin,output:process.stdout});
     try {

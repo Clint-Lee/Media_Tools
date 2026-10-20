@@ -1,14 +1,34 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {creativeVideo}=require('../lib/public-discovery');
+const creative=require('../lib/tiktok-creative');
 const {videoFromPost}=require('../lib/x-public');
 const {parseState}=require('../lib/red-public');
 const {metadataFromDetail}=require('../lib/kuaishou-public');
 const {matchesCategory}=require('../lib/video-categories');
 const {prepareVideoList}=require('../lib/video-pipeline');
-const entity={itemInfo:{itemID:'7123456789012345678',title:'官方隔离用例',videoURL:'https://video.tiktokcdn.com/video.mp4',createTime:'1700000000'},itemAuthorInfo:{handlerName:'fixture'},itemMetrics:{videoViews:'20',videoViewsLifeTime:'214589706'}};
-assert.equal(creativeVideo(entity).playRaw,214589706,'不能把周期播放量当累计播放');
-assert.equal(creativeVideo({...entity,itemInfo:{...entity.itemInfo,videoURL:null}}),null,'图文或话题不能冒充视频');
+// TikTok Creative Center 话题趋势榜：热度是归一化指数，作品数是平台计数，两者都不是视频播放量。
+const hashtagItem={hashtagID:'7691443554018656263',hashtagName:'tiktokscaryhorrorcontest',rankIndex:1,publishCnt:73462,
+    popularityCurve:[{timestamp:'1791504000',value:49.96},{timestamp:'1792022400',value:100}],
+    topCreators:[{nickname:'fixture',handleName:'fixture',followedCnt:101111,avatarURL:'https://p16-common-sign.tiktokcdn.com/a.jpg'}]};
+const topic=creative.hashtagTopic(hashtagItem,0,'US','7days',1700000000000);
+assert.equal(topic.title,'#tiktokscaryhorrorcontest');
+assert.equal(topic.rank,1);
+assert.equal(topic.heatRaw,100,'热度取趋势曲线最后一点');
+assert.equal(topic.worksCount,73462,'作品数用平台公开计数');
+assert.equal(topic.topCreators.length,1);
+assert.equal(topic.source,'tiktok:creative-center-hashtag');
+assert.match(topic.desc,/不是视频播放量/,'话题热度与作品数必须明确标注不是播放量');
+// 没有热度曲线时保持未公开，不能补 0 或拿作品数冒充热度
+assert.equal(creative.hashtagTopic({hashtagName:'x'},0,'US','7days',0).heatRaw,null);
+assert.equal(creative.hashtagTopic({hashtagName:'x'},0,'US','7days',0).heatDisplay,'未公开');
+// 话题名缺失必须丢弃
+assert.equal(creative.hashtagTopic({hashtagID:'1'},0,'US','7days',0),null);
+assert.equal(creative.latestValue([]),null);
+assert.equal(creative.latestValue(null),null);
+// 时间范围与地区映射必须显式
+assert.equal(creative.TIME_RANGES['7days'],7);
+assert.equal(creative.TIME_RANGES['3months'],90);
+assert.equal(creative.REGIONS.all,'US');
 const post={type:'status',id:'2110094874024219133',text:'真实结构的隔离视频',author:{screen_name:'fixture'},created_timestamp:Math.floor(Date.now()/1000),views:99999999,likes:120,media:{videos:[{type:'video',id:'media-id',url:'https://video.twimg.com/video.mp4',thumbnail_url:'https://pbs.twimg.com/cover.jpg'}]}};
 assert.equal(videoFromPost(post).playRaw,null,'帖子曝光不能填进视频播放');
 assert.equal(videoFromPost({...post,media:{photos:[{}]}}),null,'X图文不进入视频列表');
@@ -32,7 +52,7 @@ assert.equal(metadataFromDetail({photo:{id:'real-id',photoUrl:'https://v1.kwaicd
 assert.equal(matchesCategory({title:'education story'},'pets'),false,'cat子串不能把education误判成猫');
 assert.equal(matchesCategory({title:'#cats funny'},'pets'),true);
 assert.equal(matchesCategory({title:'普通标题',description:'Science & Technology'},'tech'),true);
-assert.ok(prepareVideoList([creativeVideo(entity)])[0].playRaw>=1e8);
+assert.ok(prepareVideoList([{id:'7123456789012345678',platform:'tiktok',playRaw:214589706,title:'官方隔离用例'}])[0].playRaw>=1e8);
 (async()=>{
     // 时效/关键词是同一原始采集池的本地筛选，不应每切一次就重新开3个浏览器。
     const storage=new Map();let calls=0;
@@ -40,8 +60,9 @@ assert.ok(prepareVideoList([creativeVideo(entity)])[0].playRaw>=1e8);
     const context={memo,withPage:async()=>{calls++;return {list:[{id:'7123456789012345678',title:'上海科技视频',platform:'tiktok',playRaw:100,pubdate:Math.floor(Date.now()/1000),fetchedAt:Date.now()}],hasMore:false};}};
     const options={platform:'tiktok',category:'all',timeRange:'all',query:'',page:1};
     const rankings=require('../lib/platform-rankings');
-    await rankings.publicPageVideos(options,context);assert.equal(calls,3);
+    // 发现页与标签页走浏览器；Creative Center 话题榜改走公开 HTTP 接口，不再占浏览器上下文。
+    await rankings.publicPageVideos(options,context);assert.equal(calls,2);
     const filtered=await rankings.publicPageVideos({...options,timeRange:'3days',query:'上海'},context);
-    assert.equal(calls,3);assert.equal(filtered.list.length,1);
-    console.log('Public discovery identity, cumulative views, no impression substitution, dates and shared-pool tests passed');
+    assert.equal(calls,2);assert.equal(filtered.list.length,1);
+    console.log('Public discovery identity, topic-ranking separation, no impression substitution, dates and shared-pool tests passed');
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -274,9 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PLATFORM_CONFIG = {
         bilibili:    { name: '哔哩哔哩', color: '#fb7299', glow: 'rgba(251,114,153,0.3)', badge: '官方榜单 / 高播放检索' },
-        douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '免登录公开精选 / 播放量可能未公开' },
-        youtube:     { name: 'YouTube', color: '#ff0033', glow: 'rgba(255,0,51,0.3)', badge: '官方 API / 公开搜索' },
-        tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '免登录公开发现 · 真实播放量' },
+        douyin:      { name: '抖音热点', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', badge: '热点视频榜 + 公开精选 · 播放未公开' },
+        youtube:     { name: 'YouTube', color: '#ff0033', glow: 'rgba(255,0,51,0.3)', badge: 'innertube 公开检索 · 实际观看计数' },
+        tiktok:      { name: 'TikTok', color: '#00f2fe', glow: 'rgba(0,242,254,0.3)', badge: '公开发现 · 详情页实际播放计数' },
         twitter:     { name: 'Twitter / X', color: '#38bdf8', glow: 'rgba(56,189,248,0.3)', badge: '公开账号视频 · 官方匿名播放统计' },
         xiaohongshu: { name: '小红书', color: '#ff2442', glow: 'rgba(255,36,66,0.3)', badge: '免登录公开推荐 · 未公开播放不入榜' },
         kuaishou:    { name: '快手热门', color: '#ff5000', glow: 'rgba(255,80,0,0.3)', badge: '官网精彩短视频 · 实际播放量' }

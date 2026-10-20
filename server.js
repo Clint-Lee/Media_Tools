@@ -599,7 +599,7 @@ app.post('/api/settings', authenticate, accounts.admin, (req, res) => {
 });
 
 // All rankings below are sourced from live platform responses. No fixture pools.
-async function fetchYouTubeLive(options) {
+async function fetchYouTubeLive(options, fallbackError = null) {
     if (options.page > 1) throw new Error('YouTube 公开页面不支持可靠的继续翻页，请配置 YOUTUBE_API_KEY 使用官方翻页。');
     const terms = { comedy: ['stand up comedy', 'funny videos', 'comedy'], ent: ['entertainment', 'celebrity', 'movies'],
         tech: ['science and technology', 'gadgets', 'computer hardware', 'artificial intelligence', 'smartphone review'],
@@ -618,14 +618,15 @@ async function fetchYouTubeLive(options) {
         if (!match) throw new Error('YouTube 未返回公开搜索数据');
         return extractYouTubeVideos(JSON.parse(match[1]));
     });
-    if (!results.some(r => r.value?.length)) throw new Error('YouTube 公开搜索暂不可用，请检查代理/地区访问或配置 YOUTUBE_API_KEY。');
+    if (!results.some(r => r.value?.length)) throw new Error('YouTube 公开检索暂不可用' + (fallbackError ? '（innertube：' + fallbackError.message + '）' : '') + '，请检查代理/地区访问或配置 YOUTUBE_API_KEY。');
     const maxAge = require('./lib/video-pipeline').TIME_RANGE_SECONDS[options.timeRange];
     const candidates = results.flatMap(r => r.value || []).filter(video => !maxAge || video.publishedAgeUpperBound !== null && video.publishedAgeUpperBound <= maxAge);
     const list = prepareVideoList(candidates, { timeRange: options.timeRange, limit: 2000 });
     return { list, hasMore: false, source: 'youtube:public-search', partial: results.some(r => r.error),
         scope: { kind: 'search-sample', label: '关键词主题样本 · 日期精度见作品', exhaustive: false, metric: 'views', categoryMethod: 'semantic-search' },
         coverage: { candidates: candidates.length, unique: list.length },
-        message: 'YouTube 多关键词主题搜索（非官方分区），按页面播放量排序；近似日期采用保守边界筛选，不是全站榜。官方分区与可靠继续翻页需配置 YOUTUBE_API_KEY。' };
+        message: 'YouTube 多关键词主题搜索（非官方分区），按页面播放量排序；近似日期采用保守边界筛选，不是全站榜。官方分区与可靠继续翻页需配置 YOUTUBE_API_KEY。'
+            + (fallbackError ? ' innertube 公开检索本次不可用（' + fallbackError.message + '），已改用页面解析路径。' : '') };
 }
 
 async function supplementPublicMetrics(result,options) {
@@ -676,6 +677,8 @@ async function handleLiveVideos(req, res) {
             hasMore: result.hasMore, nextCursor: result.nextCursor || '', scope: result.scope, coverage: result.coverage, stale: result.stale || false, refreshing:result.refreshing || false,
             fetchedAt: result.list[0]?.fetchedAt || Date.now(), collection: result.collection,
             metricEnrichment:result.metricEnrichment,
+            // TikTok Creative Center 话题趋势榜与视频是两种数据，单独透出，不与视频混榜。
+            ...(result.topicRanking ? { topicRanking: result.topicRanking } : {}),
             dataQuality: require('./lib/data-quality').videoDataQuality(result.list, {...result,sortBy:options.sortBy})
         });
     } catch (error) {
