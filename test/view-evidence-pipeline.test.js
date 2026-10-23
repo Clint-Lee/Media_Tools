@@ -506,6 +506,31 @@ ok('prepareVideoList 时效过滤在排序前完成，不会选到过期项', ()
     assert.strictEqual(out[0].id, 'BV0000000002', '不能因为播放量高就选入过期项');
 });
 
+ok('prepareVideoList 的 filteredKnownViews 是全量统计，不是本页条数', () => {
+    const { prepareVideoList } = require(path.join(root, 'lib/video-pipeline.js'));
+    const now = Math.floor(Date.now() / 1000);
+    // 100 条全部有播放量，但只取 30 条
+    const list = Array.from({ length: 100 }, (_, i) => ({
+        id: 'BV' + String(i).padStart(10, '0'), platform: 'bilibili',
+        title: '视频 ' + i, pubdate: now - 100,
+        playRaw: 1000 + i, likeRaw: i, fetchedAt: now * 1000
+    }));
+    const out = prepareVideoList(list, { timeRange: 'all', sortBy: 'views', now, limit: 30 });
+    assert.strictEqual(out.length, 30, '只构造 30 条');
+    assert.strictEqual(out.filteredTotal, 100, 'filteredTotal 是筛选后总数');
+    assert.strictEqual(out.filteredKnownViews, 100,
+        'filteredKnownViews 必须是全量已知播放量条数（100），不能等于本页 30 条');
+
+    // 混合情况：一半有播放量
+    const mixed = Array.from({ length: 100 }, (_, i) => ({
+        id: 'BV' + String(i).padStart(10, '0'), platform: 'bilibili',
+        title: '视频 ' + i, pubdate: now - 100,
+        playRaw: i % 2 === 0 ? 1000 + i : null, likeRaw: i, fetchedAt: now * 1000
+    }));
+    const out2 = prepareVideoList(mixed, { timeRange: 'all', sortBy: 'views', now, limit: 30 });
+    assert.strictEqual(out2.filteredKnownViews, 50, '一半有播放量时统计应为 50');
+});
+
 finish().then(() => {
     console.log('\n播放证据全链路不变量测试通过: ' + passed + ' 项');
 }).catch((err) => {
