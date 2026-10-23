@@ -10,7 +10,10 @@
 - **新增证据链路门禁** `test/view-evidence-pipeline.test.js`（**22 项**断言，已接入 `npm test`）：覆盖 证据校验 → 归一化 → 缓存往返 → 排序 → 数据质量 → enrich 契约，并附反向注入脚本证明门禁真能抓到"用互动数冒充播放量"。
 - **修复 2 处证据语义缺陷**：① `identity-mismatch` 被图文笔记污染（运算符优先级坑）→ 新增 `note-not-video`；② 小红书发现流条目缺 `viewEvidence`，前端无法区分"没核验/平台不给/图文笔记"→ 新增 `not-checked`。
 - **Astra 的 token 缓存方案实测被推翻**：发现流已正确保留 `xsec_token`（16/16），详情抓取 100% 成功。最初测到的失败是用过期 ID 所致，非产品缺陷，因此未实施。
+- **YouTube 指标可观测性（修复静默失败）**：实测本机直连 YouTube 超时、走 7897 代理 1.2s 成功。未配 `MEDIA_PROXY` 时抓取静默失败，用户会误以为"平台未公开播放量"。新增 `proxyConfigured` / `lastFetchState`（`not-attempted|ok|fetch-failed`）并在前端如实提示。**Astra 判定"代理自动探测"是隐患**（端口开放≠HTTP 代理，也不代表用户授权），故采用显式提示方案。
+- **YouTube 真实指标实测**：`/api/trends?platform=youtube` 返回 **118 条，111 条有真实播放量（94%）**，如 96.3 亿 / 76.8 亿；5 条并发 enrich 3201ms，二次 enrich 0ms（缓存 100% 命中）。
 - `npm test` 25 个文件全绿 exit 0。环境需先 `pnpm install`（否则 `globe.gl` 依赖缺失）。
+- **网络环境**：git push 与 YouTube 必须走 `127.0.0.1:7897` 代理；小红书/快手/B站/抖音必须直连。`MEDIA_PROXY` 是全局变量（14 处引用），配错会影响所有平台。
 
 ## 2026-10-19 后续：优先排查抖音/小红书播放（以下为历史记录）
 

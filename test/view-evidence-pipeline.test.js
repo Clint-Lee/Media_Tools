@@ -412,6 +412,41 @@ ok('enrichPublic 空列表安全返回', async () => {
     assert.ok(true, '空列表不应抛错');
 });
 
+// ---------------------------------------------------------------------------
+// 10. YouTube 预取可观测性契约（Astra 要求：不能只看"请求更多"）
+// ---------------------------------------------------------------------------
+ok('YouTube status() 暴露 proxyConfigured 与 lastFetchState', () => {
+    const yt = require(path.join(root, 'lib/youtube-public.js'));
+    const s = yt.status();
+    assert.ok(Object.hasOwn(s, 'proxyConfigured'), 'status 必须暴露 proxyConfigured，避免静默失败误导用户');
+    assert.ok(Object.hasOwn(s, 'lastFetchState'), 'status 必须暴露 lastFetchState，区分网络失败与平台不提供');
+    assert.strictEqual(typeof s.proxyConfigured, 'boolean');
+    assert.ok(['not-attempted', 'ok', 'fetch-failed'].includes(s.lastFetchState),
+        'lastFetchState 取值必须受控，实际=' + s.lastFetchState);
+    // Astra 四项指标中的缓存与 TTL 也应保持可用
+    assert.ok(Number.isFinite(s.cached), 'status 应含 cached 计数');
+    assert.ok(Number.isFinite(s.ttlMs), 'status 应含 ttlMs');
+});
+
+ok('YouTube enrich 空列表不触网且不改变状态', async () => {
+    const yt = require(path.join(root, 'lib/youtube-public.js'));
+    const before = yt.status();
+    await yt.enrich([]);
+    const after = yt.status();
+    assert.strictEqual(after.lastFetchState, before.lastFetchState,
+        '空列表不应产生抓取状态变化');
+    assert.strictEqual(after.cached, before.cached, '空列表不应改变缓存');
+});
+
+ok('YouTube apply 对无指标条目保持原样，不注入假值', () => {
+    const yt = require(path.join(root, 'lib/youtube-public.js'));
+    // 用一个几乎不可能有缓存的全新 id
+    const video = { id: 'zzzzzzzzzzz', platform: 'youtube', title: 'x', playRaw: null };
+    const out = yt.apply([video])[0];
+    assert.ok(out.playRaw == null, '无证据时 playRaw 必须保持空');
+    assert.strictEqual(out.title, 'x', '其它字段不应被改动');
+});
+
 finish().then(() => {
     console.log('\n播放证据全链路不变量测试通过: ' + passed + ' 项');
 }).catch((err) => {

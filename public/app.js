@@ -751,8 +751,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             content.innerHTML = `<p>收到 ${Number(c.candidates || 0)} 条候选，${c.retainedCandidates?'另保留 '+Number(c.retainedCandidates)+' 条30分钟内真实采集缓存（未改写采集时间），':''}合并去重并筛选后 ${Number(c.unique || 0)} 条。${c.detailsVerified != null ? '首屏详情再次核验 ' + Number(c.detailsVerified) + ' 条，未能再次核验 ' + Number(c.detailsFailed || 0) + ' 条。' : ''}${result.hasMore ? '继续滚动可获取更多搜索页。' : '本批数据源已读取完毕。'}排名仅适用于已获取作品。</p>`
+                + youtubeProxyHint(result.metricEnrichment)
                 + (c.sources || []).map(source => `<div class="source-check ${source.status === 'failed' ? 'source-check-failed' : ''}">${source.status === 'failed' ? '失败' : '已读取'} · ${escapeHtml(source.name)} · ${Number(source.count || 0)} 条${source.message ? ' · ' + escapeHtml(source.message) : ''}</div>`).join('');
         }
+    }
+
+    // YouTube 指标依赖代理。未配置代理时会静默拿不到播放量，
+    // 用户容易误以为"平台不公开"，这里如实说明是本地配置缺失。
+    function youtubeProxyHint(metricEnrichment) {
+        if (!metricEnrichment) return '';
+        if (metricEnrichment.proxyConfigured === false) {
+            return `<div class="source-check source-check-failed">未配置 MEDIA_PROXY：YouTube 指标走直连，若网络无法访问则播放量为空。这是本地配置问题，不是平台未公开。</div>`;
+        }
+        if (metricEnrichment.lastFetchState === 'fetch-failed') {
+            return `<div class="source-check source-check-failed">YouTube 指标抓取失败（网络或代理异常），未取得播放量；这不代表平台隐藏了播放量。</div>`;
+        }
+        return '';
     }
 
     async function loadData(reset = true, forceRefresh = false) {
