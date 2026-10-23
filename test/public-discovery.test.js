@@ -54,6 +54,11 @@ assert.equal(matchesCategory({title:'#cats funny'},'pets'),true);
 assert.equal(matchesCategory({title:'普通标题',description:'Science & Technology'},'tech'),true);
 assert.ok(prepareVideoList([{id:'7123456789012345678',platform:'tiktok',playRaw:214589706,title:'官方隔离用例'}])[0].playRaw>=1e8);
 (async()=>{
+    const creative=require('../lib/tiktok-creative'),views=require('../lib/tiktok-views');
+    const originalRanking=creative.fetchRanking,originalEnrich=views.enrich;
+    creative.fetchRanking=async()=>({list:[],source:'isolated-topic-fixture'});
+    views.enrich=async()=>({applied:0,pending:0});
+    try {
     // 时效/关键词是同一原始采集池的本地筛选，不应每切一次就重新开3个浏览器。
     const storage=new Map();let calls=0;
     const memo=async(key,worker)=>{if(!storage.has(key))storage.set(key,Promise.resolve().then(worker));return storage.get(key);};
@@ -65,4 +70,5 @@ assert.ok(prepareVideoList([{id:'7123456789012345678',platform:'tiktok',playRaw:
     const filtered=await rankings.publicPageVideos({...options,timeRange:'3days',query:'上海'},context);
     assert.equal(calls,2);assert.equal(filtered.list.length,1);
     console.log('Public discovery identity, topic-ranking separation, no impression substitution, dates and shared-pool tests passed');
+    }finally {creative.fetchRanking=originalRanking;views.enrich=originalEnrich;}
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -48,6 +48,7 @@ const app = require('../server');
         // Stale reservation auto-purge test: old reservations (>30m) must not leak user quota
         const testDb = store.read();
         testDb.reservations['stale-res-test'] = { username: 'alice', date: dayKey(), action: 'parse', createdAt: Date.now() - 35 * 60 * 1000 };
+        fs.writeFileSync(process.env.HOTPOT_DB_FILE, JSON.stringify(testDb));
         const updatedDb = store.read();
         assert.equal(updatedDb.reservations['stale-res-test'], undefined, '超过30分钟的孤立预占应自动回收');
 
