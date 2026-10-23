@@ -3,6 +3,9 @@
 const assert = require('node:assert/strict');
 const innertube = require('../lib/youtube-innertube');
 const tiktokViews = require('../lib/tiktok-views');
+const { prepareVideoList } = require('../lib/video-pipeline');
+const ranking = require('../public/ranking');
+const { searchFilter } = require('../lib/youtube-search');
 
 // ── 1) parseViewText：平台展示的观看计数文本
 {
@@ -15,7 +18,11 @@ const tiktokViews = require('../lib/tiktok-views');
     const wan = innertube.parseViewText('3.4万次观看');
     assert.equal(wan.value, 34000);
     assert.equal(innertube.parseViewText('').value, null);
-    assert.equal(innertube.parseViewText('No views').value, null);
+    assert.equal(innertube.parseViewText('No views').value, 0, '平台明确无播放属于真实零值');
+    assert.deepEqual(innertube.parseViewText('1.2M+ views'), { value: null, precision: 'lower-bound', text: '1.2M+ views', lowerBound: 1200000 });
+    for (const invalid of ['-12 views', 'about 120 views', '123 views yesterday', '1,23 views', '123 likes']) {
+        assert.equal(innertube.parseViewText(invalid).value, null, invalid + '不能部分提取数字');
+    }
     // 逗号与全角逗号都要处理
     assert.equal(innertube.parseViewText('1,234,567 views').value, 1234567);
     assert.equal(innertube.parseViewText('1，234，567 views').value, 1234567);
@@ -43,7 +50,8 @@ const tiktokViews = require('../lib/tiktok-views');
     assert.equal(video.viewSource, 'youtube:innertube-search');
     assert.equal(video.publishedDisplay, '4 years ago');
     assert.ok(video.pubdate > 0, '相对时间只用于时效筛选');
-    assert.equal(video.datePrecision, 'approximate', '相对时间不得标成精确发布日期');
+    assert.equal(video.datePrecision, 'relative', '相对时间使用UI可识别的精度枚举');
+    assert.equal(video.publishedAgeUpperBound, 5 * 365 * 86400);
     // 缺失观看计数时保持未知
     const noViews = innertube.innertubeVideo({ videoId: 'G5xSLbYMr-I', title: { simpleText: 'x' } }, 1790000000000);
     assert.equal(noViews.playRaw, null);
@@ -82,9 +90,99 @@ async function testSearchEmpty() {
     console.log('✓ createClient.search: 空结果明确报错，不返回假装成功的空列表');
 }
 
+function fakeSearch(renderers) {
+    const calls = [];
+    const client = innertube.createClient({
+        now: () => 1790000000000,
+        withPage: async (platform, worker, options) => {
+            assert.equal(platform, 'youtube');
+            assert.equal(options.anonymous, true);
+            return worker({
+                goto: async url => assert.equal(url, 'https://www.youtube.com/'),
+                evaluate: async (fn, arg) => {
+                    calls.push(arg);
+                    return { status: 200, data: { contents: renderers.map(videoRenderer => ({ videoRenderer })) } };
+                }
+            });
+        }
+    });
+    return { client, calls };
+}
+function fixture(id, title, views = '123 views', published = '1 day ago') {
+    return { videoId: id, title: { simpleText: title }, viewCountText: { simpleText: views }, publishedTimeText: { simpleText: published } };
+}
+
+async function testSearchContracts() {
+    const fake = fakeSearch([
+        fixture('G5xSLbYMr-I', 'cute pets cat', '1.2M views'),
+        fixture('G5xSLbYMr-J', 'cute pets puppy', '1.2M+ views'),
+        fixture('G5xSLbYMr-K', 'Unrelated Music Video', '9999999 views')
+    ]);
+    const result = await fake.client.search({ category: 'pets', timeRange: '3days', page: 1 });
+    assert.equal(fake.calls[0].query, 'pets', '分类必须进入平台请求');
+    assert.equal(fake.calls[0].params, searchFilter('3days'));
+    assert.equal(result.hasMore, false);
+    assert.equal(result.nextCursor, '');
+    assert.equal(result.scope.exhaustive, false);
+    assert.deepEqual(result.list.map(video => video.id), ['G5xSLbYMr-I', 'G5xSLbYMr-J']);
+    const [rounded, bounded] = prepareVideoList(result.list, { now: 1790000000 });
+    assert.equal(rounded.playRaw, 1200000);
+    assert.equal(rounded.viewPrecision, 'source-rounded');
+    assert.equal(rounded.viewCountText, '1.2M views');
+    assert.equal(bounded.playRaw, null);
+    assert.equal(bounded.viewPrecision, 'lower-bound');
+    assert.equal(bounded.viewLowerBound, 1200000);
+    assert.equal(bounded.viewCountText, '1.2M+ views');
+    assert.equal(ranking.summary(result.list).ranked, 1, '下界不参与播放名次');
+    assert.equal(result.coverage.unique, 2);
+
+    const unmatched = fakeSearch([fixture('G5xSLbYMr-I', 'Unrelated Music Video')]);
+    assert.deepEqual((await unmatched.client.search({ category: 'pets' })).list, [], '零命中不能回填无关作品');
+    assert.deepEqual((await unmatched.client.search({ category: 'all', query: 'not-in-result' })).list, [], '关键词也不能被零命中回退取消');
+    await unmatched.client.search({ category: 'tech', query: 'robot' });
+    assert.equal(unmatched.calls.at(-1).query, 'robot science and technology');
+    const before = unmatched.calls.length;
+    await assert.rejects(() => unmatched.client.search({ page: 2 }), /尚未接通可靠的继续翻页/);
+    await assert.rejects(() => unmatched.client.search({ page: 1, cursor: 'not-supported' }), /尚未接通可靠的继续翻页/);
+    assert.equal(unmatched.calls.length, before, '不支持翻页时不得重复抓首批');
+    const expectedTerms = { comedy: 'comedy', ent: 'entertainment', fashion: 'fashion', pets: 'pets', wildlife: 'wildlife', animal: 'animals', tech: 'science and technology', marketing: 'business marketing', kuso: 'meme remix' };
+    for (const [category, term] of Object.entries(expectedTerms)) {
+        await unmatched.client.search({ category });
+        assert.equal(unmatched.calls.at(-1).query, term, category + '需保留分类意图');
+    }
+    console.log('✓ createClient.search: 生产调用形态、分类零命中、成品精度和明确禁止伪分页');
+}
+
+async function testTimeBoundaries() {
+    const expectedUploads = { today: 2, '3days': 3, '7days': 3, '1month': 4, '6months': 5 };
+    for (const [range, upload] of Object.entries(expectedUploads)) {
+        assert.deepEqual([...Buffer.from(innertube.UPLOAD_FILTERS[range], 'base64')], [8, 3, 18, 4, 8, upload, 16, 1], range + '需同时保留播放排序、上传窗口、视频类型');
+    }
+    const cases = [
+        ['3days', '2 days ago', '3 days ago'],
+        ['7days', '6 days ago', '1 week ago'],
+        ['1month', '3 weeks ago', '4 weeks ago'],
+        ['6months', '5 months ago', '6 months ago']
+    ];
+    for (const [timeRange, safe, ambiguous] of cases) {
+        const fake = fakeSearch([
+            fixture('G5xSLbYMr-I', 'safe sample', '123 views', safe),
+            fixture('G5xSLbYMr-J', 'ambiguous sample', '123 views', ambiguous),
+            fixture('G5xSLbYMr-K', 'unknown date', '123 views', '')
+        ]);
+        const result = await fake.client.search({ timeRange });
+        assert.deepEqual(result.list.map(video => video.id), ['G5xSLbYMr-I'], timeRange + '排除未知和可能跨界日期');
+        assert.equal(fake.calls[0].params, searchFilter(timeRange));
+        assert.equal(result.list[0].datePrecision, 'relative');
+    }
+    console.log('✓ 时间筛选: 请求protobuf与3/7/30/180天保守边界');
+}
+
 (async () => {
     await testSearchInPage();
     await testSearchEmpty();
+    await testSearchContracts();
+    await testTimeBoundaries();
 
     // ── 5) TikTok apply：详情页计数覆盖近似值
     {

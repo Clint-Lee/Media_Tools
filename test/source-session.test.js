@@ -10,6 +10,10 @@ const sessions=require('../lib/platform-session');
 const rankings=require('../lib/platform-rankings');
 const {prepareVideoList}=require('../lib/video-pipeline');
 let sources=require('../lib/live-sources');
+const views=require('../lib/tiktok-views'),creative=require('../lib/tiktok-creative');
+const originalEnrich=views.enrich,originalRanking=creative.fetchRanking;
+views.enrich=async()=>({applied:0,pending:0});
+creative.fetchRanking=async()=>({list:[],source:'isolated-topic-fixture'});
 (async()=>{
     const cookies=[{name:'session',value:'isolated-test-only',domain:'.xiaohongshu.com',path:'/',secure:true,httpOnly:true,expires:-1},
         {name:'unrelated',value:'must-not-import',domain:'.example.com',path:'/',expires:-1}];
@@ -89,4 +93,4 @@ let sources=require('../lib/live-sources');
         } finally {collection.record=originalRecord;}
     } finally { Date.now=realNow; }
     console.log('source/session tests passed (isolated fixtures, no platform credentials)');
-})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await sources.closeBrowser();fs.rmSync(directory,{recursive:true,force:true});});
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{views.enrich=originalEnrich;creative.fetchRanking=originalRanking;await sources.closeBrowser();fs.rmSync(directory,{recursive:true,force:true});});

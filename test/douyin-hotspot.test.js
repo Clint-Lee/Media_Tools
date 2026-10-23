@@ -76,6 +76,8 @@ async function testHotspotRanking() {
     assert.equal(result.coverage.hiddenViews, 2, '未公开播放量的件数必须如实上报');
     assert.equal(result.scope.kind, 'official-hot-videos');
     assert.equal(result.partial, true, '播放量未公开时必须标注部分数据');
+    assert.equal(result.hasMore, false, '没有实际游标就不能提供虚假续页');
+    assert.doesNotMatch(result.message, /改用已公开的互动计数排序|后即可显示真实播放量/);
     assert.match(result.message, /play_count 恒为 0/);
     assert.ok(calls.some(key => key.startsWith('douyin:hotspot:')), '必须走快照缓存');
     console.log('✓ hotspotRanking: 真实作品、未公开播放量如实标注、缓存键正确');
@@ -112,6 +114,22 @@ async function testHotspotBlocked() {
 (async () => {
     await testHotspotRanking();
     await testHotspotEmpty();
+    await testHotspotBlocked();
+    await assert.rejects(() => hotspot.hotspotRanking({ page: 2 }), /不支持第2页/);
+    {
+        let batch, observedAt = 1000;
+        const dependencies = { now: () => observedAt, memo: async (key, worker) => batch || (batch = await worker()),
+            withPage: async (platform, worker, options) => {
+                assert.equal(options.anonymous, true);
+                return worker({ goto: async () => {}, evaluate: async () => [{ status: 200,
+                    text: JSON.stringify({ aweme_list: [rawAweme('3')] }) }] });
+            } };
+        const first = await hotspot.hotspotRanking({}, dependencies); observedAt = 5000;
+        const cached = await hotspot.hotspotRanking({}, dependencies);
+        assert.equal(first.list[0].fetchedAt, 1000);
+        assert.equal(cached.list[0].fetchedAt, 1000, '复用热点batch不能刷新作品观测时刻');
+        assert.equal(cached.list[0].viewEvidence.observedAt, 1000);
+    }
 
     // ── 5) TikTok parseDetail：只接受 ID 一致的详情
     {
@@ -151,6 +169,7 @@ async function testHotspotBlocked() {
         console.log('✓ capabilities: 抖音多来源与 TikTok 详情页播放量来源如实标注');
     }
 
+    await require('./view-detail-integration.test')();
     console.log('\nDouyin hotspot + TikTok view enrichment tests passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 
