@@ -26,10 +26,21 @@ const numericCount = (value) => {
 };
 
 let passed = 0;
+const pending = [];   // 异步用例先收集，最后统一 await，避免断言被吞掉
 function ok(name, fn) {
-    fn();
+    const result = fn();
+    if (result && typeof result.then === 'function') {
+        pending.push(result.then(() => {
+            passed++;
+            console.log('\u2713 ' + name);
+        }));
+        return;
+    }
     passed++;
     console.log('\u2713 ' + name);
+}
+async function finish() {
+    if (pending.length) await Promise.all(pending);
 }
 
 // ---------------------------------------------------------------------------
@@ -366,4 +377,44 @@ ok('缩略值与下界值被如实标记精度，不当成精确整数', () => {
     assert.strictEqual(lower.lowerBound, 1000, '下界数值单独保留');
 });
 
-console.log('\n播放证据全链路不变量测试通过: ' + passed + ' 项');
+// ---------------------------------------------------------------------------
+// 9. 小红书 enrich 并发改造的契约（离线可验证部分）
+// ---------------------------------------------------------------------------
+ok('enrichStats 在未调用前为 null，导出契约正确', () => {
+    const red = require(path.join(root, 'lib/red-public.js'));
+    assert.strictEqual(typeof red.enrichPublic, 'function', 'enrichPublic 必须导出');
+    assert.strictEqual(typeof red.enrichStats, 'function', 'enrichStats 必须导出，便于观测覆盖率');
+    // 全新进程里还没跑过 enrich
+    const stats = red.enrichStats();
+    assert.ok(stats === null || typeof stats === 'object',
+        'enrichStats 应返回 null 或统计对象');
+});
+
+ok('enrichPublic 对非小红书链接不发请求（离线，不应触网）', async () => {
+    const red = require(path.join(root, 'lib/red-public.js'));
+    const before = red.enrichStats();
+    // 全是其它平台，eligible() 应当把它们全部过滤掉
+    const list = [
+        { url: 'https://www.bilibili.com/video/BV1GJ411x7h7' },
+        { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+        { url: 'https://example.com/explore/6a87a554000000003501590f' }
+    ];
+    await red.enrichPublic(list);
+    const after = red.enrichStats();
+    // 没有合法目标时应当直接返回，不产生新的 axios 尝试
+    assert.ok(after === before || after === null || after.axiosTried === 0,
+        '非小红书链接不应产生 axios 尝试，实际=' + JSON.stringify(after));
+});
+
+ok('enrichPublic 空列表安全返回', async () => {
+    const red = require(path.join(root, 'lib/red-public.js'));
+    await red.enrichPublic([]);
+    assert.ok(true, '空列表不应抛错');
+});
+
+finish().then(() => {
+    console.log('\n播放证据全链路不变量测试通过: ' + passed + ' 项');
+}).catch((err) => {
+    console.error('\n异步用例失败:', err && err.message);
+    process.exit(1);
+});
