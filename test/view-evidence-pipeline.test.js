@@ -447,6 +447,65 @@ ok('YouTube apply 对无指标条目保持原样，不注入假值', () => {
     assert.strictEqual(out.title, 'x', '其它字段不应被改动');
 });
 
+// ---------------------------------------------------------------------------
+// 11. prepareVideoList 两阶段优化：结果必须与"全量构造"逐条一致
+// ---------------------------------------------------------------------------
+ok('prepareVideoList 小 limit 与大 limit 的前 N 条完全一致', () => {
+    const { prepareVideoList } = require(path.join(root, 'lib/video-pipeline.js'));
+    const now = Math.floor(Date.now() / 1000);
+    const list = Array.from({ length: 200 }, (_, i) => ({
+        id: 'BV' + String(i).padStart(10, '0'), platform: 'bilibili',
+        title: '视频 ' + i, pubdate: now - 100,
+        playRaw: (i * 37) % 1000, likeRaw: i,
+        commentCount: i, collectCount: i, shareCount: i,
+        fetchedAt: now * 1000
+    }));
+
+    const small = prepareVideoList(list, { timeRange: 'all', sortBy: 'views', now, limit: 30 });
+    const large = prepareVideoList(list, { timeRange: 'all', sortBy: 'views', now, limit: 200 });
+
+    assert.strictEqual(small.length, 30);
+    assert.deepStrictEqual(small.map(v => v.id), large.slice(0, 30).map(v => v.id),
+        '只构造前 30 条时，顺序必须与全量构造的前 30 条一致');
+
+    // filteredTotal 必须等于真实筛选后总数
+    assert.strictEqual(small.filteredTotal, large.length,
+        'filteredTotal 应等于筛选后真实总数，不能等于构造条数');
+});
+
+ok('prepareVideoList 惰性归一化不影响返回的互动指标字段', () => {
+    const { prepareVideoList } = require(path.join(root, 'lib/video-pipeline.js'));
+    const now = Math.floor(Date.now() / 1000);
+    const list = [{
+        id: 'BV0000000001', platform: 'bilibili', title: '测试',
+        pubdate: now - 100, playRaw: 1234, likeRaw: 56,
+        commentCount: 7, collectCount: 8, shareCount: 9,
+        fetchedAt: now * 1000
+    }];
+    const out = prepareVideoList(list, { timeRange: 'all', sortBy: 'views', now, limit: 10 })[0];
+    // 这些字段只在最终 limit 条上归一化，必须仍然齐全
+    assert.strictEqual(out.playRaw, 1234);
+    assert.strictEqual(out.likeRaw, 56);
+    assert.strictEqual(out.commentCount, 7, '评论数必须保留');
+    assert.strictEqual(out.collectCount, 8, '收藏数必须保留');
+    assert.strictEqual(out.shareCount, 9, '分享数必须保留');
+    assert.ok(out.playCount != null, '展示用文案必须生成');
+});
+
+ok('prepareVideoList 时效过滤在排序前完成，不会选到过期项', () => {
+    const { prepareVideoList } = require(path.join(root, 'lib/video-pipeline.js'));
+    const now = Math.floor(Date.now() / 1000);
+    const list = [
+        // 高播放但已过期
+        { id: 'BV0000000001', platform: 'bilibili', title: '旧视频', pubdate: now - 30 * 86400, playRaw: 999999, fetchedAt: now * 1000 },
+        // 低播放但新鲜
+        { id: 'BV0000000002', platform: 'bilibili', title: '新视频', pubdate: now - 3600, playRaw: 10, fetchedAt: now * 1000 }
+    ];
+    const out = prepareVideoList(list, { timeRange: '3days', sortBy: 'views', now, limit: 10 });
+    assert.strictEqual(out.length, 1, '过期项必须在第一阶段被滤掉');
+    assert.strictEqual(out[0].id, 'BV0000000002', '不能因为播放量高就选入过期项');
+});
+
 finish().then(() => {
     console.log('\n播放证据全链路不变量测试通过: ' + passed + ' 项');
 }).catch((err) => {

@@ -62,8 +62,18 @@ try {
     assert.throws(() => store.query({ platform: '../private' }), e => e.status === 400);
 
     const file = path.join(directory, 'youtube.json');
+    const logFile = file + '.log';
     const beforeFailure = fs.readFileSync(file, 'utf8');
-    const broken = createIndex({ directory, now, io: { ...fs, renameSync(from, to) { if (to === file) throw new Error('disk failure'); return fs.renameSync(from, to); } } });
+    // 索引现在走"快照 + 增量日志"：热路径写 append log，compact 时才 rename 快照。
+    // 因此磁盘失败注入要同时覆盖两条写路径，才能保证"任何写失败都不假报保存"。
+    const broken = createIndex({
+        directory, now,
+        io: {
+            ...fs,
+            renameSync(from, to) { if (to === file) throw new Error('disk failure'); return fs.renameSync(from, to); },
+            appendFileSync(target, ...rest) { if (target === logFile) throw new Error('disk failure'); return fs.appendFileSync(target, ...rest); }
+        }
+    });
     assert.throws(() => broken.record('youtube', [video('not-saved')]), /未假报保存/);
     assert.equal(broken.query({ ...options, query: 'not-saved' }).total, 0, '写入失败必须回滚内存');
     assert.equal(fs.readFileSync(file, 'utf8'), beforeFailure);
