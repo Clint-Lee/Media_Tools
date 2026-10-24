@@ -142,15 +142,28 @@ async function testSearchContracts() {
     await unmatched.client.search({ category: 'tech', query: 'robot' });
     assert.equal(unmatched.calls.at(-1).query, 'robot science and technology');
     const before = unmatched.calls.length;
-    await assert.rejects(() => unmatched.client.search({ page: 2 }), /尚未接通可靠的继续翻页/);
-    await assert.rejects(() => unmatched.client.search({ page: 1, cursor: 'not-supported' }), /尚未接通可靠的继续翻页/);
-    assert.equal(unmatched.calls.length, before, '不支持翻页时不得重复抓首批');
+    // 新契约：翻页走平台官方续页令牌。没有上一页令牌时明确拒绝，不伪造页码。
+    await assert.rejects(() => unmatched.client.search({ page: 2 }), /续页令牌/);
+    assert.equal(unmatched.calls.length, before, '缺令牌时不得重复抓首批');
+    // 显式 cursor 即官方续页令牌：请求体必须携带 continuation。
+    const withCursor = await unmatched.client.search({ page: 2, cursor: 'official-token' });
+    assert.equal(unmatched.calls.at(-1).continuation, 'official-token', 'cursor 作为官方续页代牌透传');
+    assert.equal(withCursor.hasMore, false, '响应无续页结构时不得声称有下一页');
+    // 官方续页结构（continuationItemRenderer.continuationEndpoint.continuationCommand.token）要被提取。
+    const tokenFake = fakeSearch([
+        { ...fixture('G5xSLbYMr-I', 'safe sample'), continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: 'next-page-token' } } } }
+    ]);
+    const firstPage = await tokenFake.client.search({ query: 'music' });
+    assert.equal(firstPage.hasMore, true, '响应带官方续页结构时必须如实翻页');
+    assert.equal(firstPage.nextCursor, 'next-page-token');
+    await tokenFake.client.search({ page: 2, cursor: 'next-page-token' });
+    assert.equal(tokenFake.calls.at(-1).continuation, 'next-page-token');
     const expectedTerms = { comedy: 'comedy', ent: 'entertainment', fashion: 'fashion', pets: 'pets', wildlife: 'wildlife', animal: 'animals', tech: 'science and technology', marketing: 'business marketing', kuso: 'meme remix' };
     for (const [category, term] of Object.entries(expectedTerms)) {
         await unmatched.client.search({ category });
         assert.equal(unmatched.calls.at(-1).query, term, category + '需保留分类意图');
     }
-    console.log('✓ createClient.search: 生产调用形态、分类零命中、成品精度和明确禁止伪分页');
+    console.log('✓ createClient.search: 生产调用形态、分类零命中、成品精度和官方续页令牌契约');
 }
 
 async function testTimeBoundaries() {
