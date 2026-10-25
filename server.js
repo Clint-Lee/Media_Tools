@@ -298,7 +298,9 @@ app.get('/api/download', mediaAccess, async (req, res) => {
 });
 
 // ── Anti-Hotlinking Video Playback Proxy (Range Supported) ───────────────────
-app.get('/api/play', async (req, res) => {
+// 播放代理与下载代理一致要求访客/账号会话：不消耗处理额度，
+// 但把本服务当作匿名中继的跨站请求会被拒绝。
+app.get('/api/play', mediaAccess, async (req, res) => {
     const targetUrl = req.query.url;
     const customReferer = req.query.referer;
 
@@ -375,7 +377,7 @@ function cacheVideoApi(req, res, next) {
     const sendJson = res.json.bind(res);
     res.json = payload => {
         if (res.statusCode < 400 && payload?.success && Array.isArray(payload.list) && !payload.stale && !payload.refreshing) {
-            const ttl = payload.partial || payload.stale ? 60000 : req.path === '/api/trends' ? 120000 : 60000;
+            const ttl = payload.partial ? 60000 : req.path === '/api/trends' ? 120000 : 60000;
             videoApiCache.set(cacheKey, { payload, expiresAt: Date.now() + ttl });
             if (videoApiCache.size > 200) {
                 const oldestKey = videoApiCache.keys().next().value;
@@ -474,23 +476,12 @@ function formatDuration(sec) {
     return `${m}:${rs.toString().padStart(2, '0')}`;
 }
 
-// Helper to parse YouTube publishedTime text into relative age in seconds
-function parseRelativeTime(text) {
-    return require('./lib/youtube-search').relativeAge(text)?.seconds || 0;
-}
-
-// Helper to filter list by upload date/timeRange
-function filterByTimeRange(list, timeRange) {
-    return prepareVideoList(list, { timeRange, requireKnownDate: true });
-}
-
 function sendVideoList(res, list, timeRange, extra = {}) {
     if(extra.sortBy==='likes')extra={...extra,scope:extra.scope?{...extra.scope,metric:'likes'}:undefined,sourceDescription:extra.sourceMessage,
         sourceMessage:'当前为公开点赞榜，不是播放榜。按已采集作品的真实点赞排序，缺少点赞不入榜；来源：'+(extra.source || '平台公开数据')};
     const prepared = attachVideoLocations(prepareVideoList(list, {
         timeRange,
         sortBy:extra.sortBy,
-        requireKnownDate: timeRange !== 'all',
         limit: 2000
     }));
     const locatedCount = prepared.filter(item => item.geo).length;
@@ -560,11 +551,14 @@ function extractYouTubeVideos(obj) {
 
 // Route to get active settings
 app.get('/api/settings', (req, res) => {
-    const visibleProxy=activeProxy?new URL(activeProxy):null;
+    const isAdmin = accounts.optionalUser(req)?.role === 'admin';
+    const visibleProxy = isAdmin && activeProxy ? new URL(activeProxy) : null;
     if(visibleProxy){visibleProxy.username='';visibleProxy.password='';}
     res.json({
         success: true,
+        // 代理地址只对管理员可见；普通访客只拿到连接状态布尔，不泄露服务器出口配置。
         proxy: visibleProxy?.toString().replace(/\/$/,'') || '',
+        proxyConfigured: Boolean(activeProxy),
         status: activeProxy ? 'Connected' : 'Disconnected'
     });
 });
@@ -614,9 +608,9 @@ async function fetchYouTubeLive(options, fallbackError = null) {
             headers: { 'User-Agent': liveSources.UA || 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9' },
             timeout: 12000, ...(proxyAgent ? { httpsAgent: proxyAgent } : {})
         });
-        const match = String(response.data).match(/(?:var )?ytInitialData\s*=\s*({.*?});/s);
+        const match = require('./lib/youtube-public').initialObject(String(response.data), 'ytInitialData');
         if (!match) throw new Error('YouTube 未返回公开搜索数据');
-        return extractYouTubeVideos(JSON.parse(match[1]));
+        return extractYouTubeVideos(match);
     });
     if (!results.some(r => r.value?.length)) throw new Error('YouTube 公开检索暂不可用' + (fallbackError ? '（innertube：' + fallbackError.message + '）' : '') + '，请检查代理/地区访问或配置 YOUTUBE_API_KEY。');
     const maxAge = require('./lib/video-pipeline').TIME_RANGE_SECONDS[options.timeRange];
@@ -727,16 +721,22 @@ app.get('/api/geo-hotspots', async (req, res) => {
         const result = scope==='available' ? await liveSources.collectedGeoVideos({...options,scope}, fetchYouTubeLive)
             : {...await liveSources.getVideos(options,fetchYouTubeLive),platforms:[options.platform]};
         const list = liveSources.aggregateGeo(result.list);
+        // 只统计真实观测时间：缺 fetchedAt 的记录不得冒充"现在采集"；
+        // 逐项比较，避免 Math.min(...大数组) 的栈溢出隐患。
+        let collectedAt = null;
+        for (const video of result.list) {
+            if (Number.isFinite(video.fetchedAt) && (collectedAt === null || video.fetchedAt < collectedAt)) collectedAt = video.fetchedAt;
+        }
         return res.json({ success: true, list, hotspots: list, cityCount: list.length,
             scope, platforms:result.platforms, cityCatalog:require('./lib/geo-hotspots').CITY_CATALOG.map(({city,country,lat,lng})=>({city,country,lat,lng})),
             totalSignals: list.reduce((n, city) => n + city.count, 0), sampleSize: result.list.length,
-            collectedAt:result.list.length?Math.min(...result.list.map(v=>v.fetchedAt || Date.now())):null,
+            collectedAt,
             method: (scope==='available'?'已采集平台汇总':'当前平台')+'视频样本中的城市关联（内容识别，不代表作者 IP 属地）', generatedAt: Date.now() });
     } catch (error) { return res.status(502).json({ success: false, list: [], message: error.message }); }
 });
 
 // Stream proxy to bypass Referer / CORS restrictions (e.g. Bilibili/Douyin CDNs)
-app.get('/api/proxy-video', (req,res,next)=>req.query.download==='1'?mediaAccess(req,res,next):next(), async (req, res) => {
+app.get('/api/proxy-video', mediaAccess, async (req, res) => {
     const { referer, download } = req.query;
     let { url } = req.query;
     if (!url) return res.status(400).send('No URL provided');
@@ -806,7 +806,7 @@ app.get('/api/proxy-video', (req,res,next)=>req.query.download==='1'?mediaAccess
 
 
 // Image proxy — bypass hotlink protection for Bilibili, Douyin, and other CDNs
-app.get('/api/proxy-image', (req, res, next) => req.query.download === '1' ? mediaAccess(req, res, next) : next(), async (req, res) => {
+app.get('/api/proxy-image', mediaAccess, async (req, res) => {
     let { url } = req.query;
     if (!url) return res.status(400).send('No URL provided');
     try {
@@ -861,7 +861,8 @@ app.get('/api/proxy-image', (req, res, next) => req.query.download === '1' ? med
 // Authentic Real-Time Danmaku API (Official Bilibili XML / CID parser + multi-platform bullet stream)
 app.get('/api/danmaku', async (req, res) => {
     const { bvid, id, cid } = req.query;
-    let targetCid = cid;
+    // cid 会被拼进固定主机的URL路径，必须限定为纯数字，防止路径改写。
+    let targetCid = typeof cid === 'string' && /^\d{1,15}$/.test(cid) ? cid : null;
     let targetBvid = bvid || id;
 
     try {
@@ -943,7 +944,16 @@ app.post('/api/transcript', mediaAccess, (req, res) => { req.body ||= {}; req.bo
 
 if (require.main === module) {
     let server;
-    detectProxy().then(()=>{ server = app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
+    // 非本地监听必须显式配置允许的Host，否则Host检查形同虚设（DNS rebinding风险）。
+    // 宁可拒绝启动也不能静默以无Host校验的方式对公网服务。
+    const bindHost = process.env.HOST || '127.0.0.1';
+    if (!['127.0.0.1', 'localhost', '::1'].includes(bindHost) && !process.env.HOTPOT_ALLOWED_HOSTS?.trim()) {
+        console.error('[启动中止] 当前监听 ' + bindHost + ' 但未配置 HOTPOT_ALLOWED_HOSTS。'
+            + '公网/局域网监听必须显式声明允许的Host（如 HOTPOT_ALLOWED_HOSTS=hotpot.example.com），'
+            + '否则Host校验不生效。若只想本机使用，请保持 HOST=127.0.0.1。');
+        process.exit(1);
+    }
+    detectProxy().then(()=>{ server = app.listen(PORT, bindHost, () => {
         console.log(`[万热观象 | Heat Hub] Server is running at http://localhost:${PORT}`);
         if(process.env.HOTPOT_PREWARM!=='0')liveSources.boundedMap(['tiktok','kuaishou','xiaohongshu','twitter','douyin'],2,async platform=>{
             await liveSources.getVideos({platform,category:'all',timeRange:'all',query:'',page:1},fetchYouTubeLive)

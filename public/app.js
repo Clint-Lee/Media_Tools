@@ -336,9 +336,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.timers.push(intervalId);
 
                 // Pre-emit immediate floating real danmakus
-                setTimeout(() => this.emit(containerEl, this.currentDanmakus[0]?.text, false, this.currentDanmakus[0]?.color), 150);
+                // 预发射定时器也纳入this.timers，弹窗关闭(stop)时一并清理。
+                this.timers.push(setTimeout(() => this.emit(containerEl, this.currentDanmakus[0]?.text, false, this.currentDanmakus[0]?.color), 150));
                 if (this.currentDanmakus.length > 1) {
-                    setTimeout(() => this.emit(containerEl, this.currentDanmakus[1]?.text, false, this.currentDanmakus[1]?.color), 600);
+                    this.timers.push(setTimeout(() => this.emit(containerEl, this.currentDanmakus[1]?.text, false, this.currentDanmakus[1]?.color), 600));
                 }
             }
         }
@@ -1233,9 +1234,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('div');
             row.className = 'hotspot-row';
             const tierClass = spot.tier || 'normal';
+            // 颜色只接受十六进制色值，防止API数据注入style属性。
+            const safeColor = /^#[0-9a-fA-F]{3,8}$/.test(spot.color || '') ? spot.color : '#38bdf8';
             row.innerHTML = `
                 <span><i class="legend-dot ${tierClass}"></i> <strong>${escapeHtml(spot.city)}</strong> · ${escapeHtml(spot.country)}</span>
-                <span style="color: ${spot.color || '#38bdf8'}; font-weight: 700;">${escapeHtml(spot.countDisplay || formatHeat(spot.count) + '条')}</span>
+                <span style="color: ${safeColor}; font-weight: 700;">${escapeHtml(spot.countDisplay || formatHeat(spot.count) + '条')}</span>
             `;
             row.addEventListener('click', () => {
                 globeRadar.focusCity(spot.lat, spot.lng);
@@ -1254,7 +1257,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.modalVideoPlayCount.innerHTML = `<i class="fa-regular fa-eye"></i> ${escapeHtml(metricText(video,'views'))} 播放${video.likeRaw==null && video.likeLowerBound==null?'':' · '+escapeHtml(metricText(video,'likes'))+' 点赞'}`;
 
         // Direct Original Platform Link in New Tab
-        dom.modalOpenOriginBtn.href = video.url || '#';
+        dom.modalOpenOriginBtn.href = safeExternalUrl(video.url);
         dom.modalOpenOriginBtn.classList.toggle('hidden', !video.url);
 
         // Player Embed Construction
@@ -1305,7 +1308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p style="color: #fff; font-size: 13.5px; font-weight: 600; margin: 0;">支持在线嗅探物理媒体流或直接在原站观看</p>
                         <div style="display: flex; gap: 10px; margin-top: 4px;">
                             <button type="button" class="btn btn-primary btn-sm sniff-action-btn" style="font-size: 12px; pointer-events: auto;"><i class="fa-solid fa-wand-magic-sparkles"></i> 提取物理媒体</button>
-                            ${video.url ? `<a href="${escapeHtml(video.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="font-size: 12px; pointer-events: auto;"><i class="fa-solid fa-arrow-up-right-from-square"></i> 在原平台打开</a>` : ''}
+                            ${video.url ? `<a href="${escapeHtml(safeExternalUrl(video.url))}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="font-size: 12px; pointer-events: auto;"><i class="fa-solid fa-arrow-up-right-from-square"></i> 在原平台打开</a>` : ''}
                         </div>
                     </div>
                 </div>
@@ -1847,14 +1850,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/settings');
             const data = await res.json();
             if (data.success) {
+                // 代理地址仅管理员可见；普通用户凭 proxyConfigured 布尔显示连接状态。
                 dom.settingProxy.value = data.proxy || '';
-                updateProxyStatus(data.proxy);
+                updateProxyStatus(Boolean(data.proxyConfigured || data.proxy));
             }
         } catch (e) {}
     }
 
-    function updateProxyStatus(proxyUrl) {
-        const hasProxy = Boolean(proxyUrl && proxyUrl.trim());
+    function updateProxyStatus(enabled) {
+        const hasProxy = Boolean(enabled);
         dom.proxyStatus.className = `proxy-status-badge ${hasProxy ? 'active' : 'inactive'}`;
         dom.proxyStatus.textContent = hasProxy ? '已连接' : '未连接';
         dom.sidebarProxyDot?.classList.toggle('active', hasProxy);
@@ -1874,7 +1878,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.success) {
                 showToast('系统设置与网络代理已保存生效！', 'success');
-                updateProxyStatus(proxy);
+                updateProxyStatus(Boolean(proxy));
                 dom.settingsModal?.classList.add('hidden');
             }
         } catch (e) {
@@ -1929,6 +1933,12 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    // 可点击跳转的URL只接受http(s)，防止 javascript: 等协议经API数据进入 href。
+    function safeExternalUrl(url) {
+        const value = String(url || '').trim();
+        return /^https?:\/\//i.test(value) ? value : '#';
     }
 
     // ── Heat Hub Universal Downloader & Creative Master Controller ──
@@ -2211,7 +2221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dom.mtResDuration.textContent = typeof dur === 'number' ? `${Math.floor(dur / 60)}分${dur % 60}秒` : (dur || 'Shorts');
             }
             if (dom.mtResOriginLink) {
-                dom.mtResOriginLink.href = data.url || '#';
+                dom.mtResOriginLink.href = safeExternalUrl(data.url);
             }
 
             // Stream playback proxy URL
@@ -2299,7 +2309,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 } else {
                     dom.mtTranscriptTimeline.innerHTML = list.map(item => {
-                        const startSec = item.startSec || 0;
+                        // startSec 必须收敛为数字后再进属性插值，非数字输入按0处理。
+                        const startSec = Number(item.startSec) || 0;
                         const mm = String(Math.floor(startSec / 60)).padStart(2, '0');
                         const ss = String(Math.floor(startSec % 60)).padStart(2, '0');
                         const timeStr = `${mm}:${ss}`;
@@ -2437,13 +2448,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dom.mtAiTrigger) dom.mtAiTrigger.textContent = aiData?.summary || '读取实际字幕或视频原声后，将显示视频讲了什么。';
             if (dom.mtAiHooks) {
                 const points = aiData?.keyPoints || [];
-                dom.mtAiHooks.innerHTML = points.length ? points.map(point => `
-                    <button class="hook-card analysis-point" data-seek="${Number(point.startSec)}">
-                        <span class="hook-tag">${Math.floor(point.startSec / 60)}:${String(Math.floor(point.startSec % 60)).padStart(2, '0')}</span>
+                dom.mtAiHooks.innerHTML = points.length ? points.map(point => {
+                    const startSec = Number(point.startSec) || 0;
+                    return `
+                    <button class="hook-card analysis-point" data-seek="${startSec}">
+                        <span class="hook-tag">${Math.floor(startSec / 60)}:${String(Math.floor(startSec % 60)).padStart(2, '0')}</span>
                         <p class="hook-desc">${escapeHtml(point.text)}</p>
                         <blockquote>字幕依据：${escapeHtml(point.quote)}</blockquote>
                     </button>
-                `).join('') : '<p>等待可回溯的字幕重点。</p>';
+                `; }).join('') : '<p>等待可回溯的字幕重点。</p>';
                 dom.mtAiHooks.querySelectorAll('[data-seek]').forEach(button => button.addEventListener('click', () => this.seekVideo(Number(button.dataset.seek))));
             }
             if (dom.mtAiStoryboard) dom.mtAiStoryboard.textContent = aiData?.notice || '内容分析依据字幕与语音。画面、镜头及音乐没有进行视觉识别。';

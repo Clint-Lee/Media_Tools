@@ -296,5 +296,5 @@ module.exports = {
 };
 `;
 
-fs.writeFileSync('lib/category-fallback-pool.js', code, 'utf8');
+fs.writeFileSync('archive/category-fallback-pool.js', code, 'utf8');
 console.log('Successfully wrote category-fallback-pool.js with inlined multiPlatformObj!');

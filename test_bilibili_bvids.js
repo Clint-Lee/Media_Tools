@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { BILIBILI_CATEGORIES, getCategoryFallbackList, EVENT_TOPIC_TEMPLATES } = require('./lib/category-fallback-pool');
+const { BILIBILI_CATEGORIES, getCategoryFallbackList, EVENT_TOPIC_TEMPLATES } = require('./archive/category-fallback-pool');
 
 async function checkBvid(bvid) {
     try {
