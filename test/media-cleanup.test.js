@@ -17,6 +17,13 @@ const linked = path.join(cache, 'job-linked');
 let hasLink = false;
 try { fs.symlinkSync(outside, linked, process.platform === 'win32' ? 'junction' : 'dir'); hasLink = true; }
 catch (error) { if (!['EPERM','EACCES','ENOSYS'].includes(error.code)) throw error; }
+// 索引外孤儿目录：stale 者启动即回收；fresh 者受30分钟保守阈值保护；非 job-* 命名者不动。
+const orphanStale = makeDirectory('job-orphan-stale');
+const orphanFresh = makeDirectory('job-orphan-fresh');
+const unindexed = makeDirectory('unindexed-plain');
+const staleTime = new Date(Date.now() - 2 * 3600000);
+fs.utimesSync(orphanStale, staleTime, staleTime);
+fs.utimesSync(unindexed, staleTime, staleTime);
 const now = Date.now(), old = now-2*3600000;
 const row = (id, target, completedAt=old) => ({id,owner:'alice',kind:'download',status:'complete',createdAt:old,completedAt,directory:target});
 fs.writeFileSync(path.join(cache,'jobs-index.json'), JSON.stringify([row('expired',expired),row('recent',recent,now),row('unrelated',unrelated),row('outside',outside),row('nested',nested),row('blocked',blocked),...(hasLink?[row('linked',linked)]:[])]));
@@ -37,6 +44,9 @@ try {
     assert.equal(fs.existsSync(blocked), true, 'failed deletion retains files');
     assert.equal(jobs.getJob('blocked','alice').status, 'complete', 'failed deletion retains retry record');
     if (hasLink) assert.equal(fs.lstatSync(linked).isSymbolicLink(), true, 'junction/symlink is not removed or traversed');
+    assert.equal(fs.existsSync(orphanStale), false, 'unindexed stale job directory is swept at startup');
+    assert.equal(fs.existsSync(orphanFresh), true, 'recently modified unindexed directory is spared by the conservative age threshold');
+    assert.equal(fs.existsSync(unindexed), true, 'non job-* name is never swept even when stale');
     assert.equal(jobs.getJob('expired','alice'), null);
     assert.equal(jobs.getJob('recent','alice').status, 'complete');
     jobs.shutdown();

@@ -1,6 +1,16 @@
 # HotPot 当前交接与未完成项（2026-10-23 更新）
 
-## 2026-10-23 最新：证据门禁 + 小红书核验 0%→100% + 索引性能 15x（优先入口）
+## 2026-10-25 最新：测试禁网守卫 + 孤儿目录盘点 + 安全收尾（优先入口）
+
+基线 `29fd1b6` 起两批，均已过 `npm test` 28 套件全绿；详见 [10-25 实现](docs/IMPLEMENTATION_2026-10-25.md) 与 [10-24 实现](docs/IMPLEMENTATION_2026-10-24.md)。
+
+- **T01 落地**：`npm test` 全部 28 个入口挂载 `test/net-guard.js` 禁网守卫（放行回环/`*.test`，拦截 DNS、直连 IP、fetch），并已反向注入验证真的能抓到外访；"通过"从此等于"严格离线"，不再依赖逐个 mock 的完整性。
+- **M02 收尾**：媒体任务索引外孤儿 `job-*` 目录启动受控盘点——只动 cacheRoot 直系真实目录，junction/外部/嵌套/非 job 名一律不动，30 分钟 mtime 保守阈值，失败保留重试；含 3 项新断言。
+- **安全收尾（10-24 批）**：短链重定向逐跳公网校验（含 catch 兜底不得绕过）；`/api/play`、`/api/proxy-video`、`/api/proxy-image` 一律 `mediaAccess`；`GET /api/settings` 代理地址仅管理员可见（前端按 `proxyConfigured` 布尔显示状态）；非本地监听未配 `HOTPOT_ALLOWED_HOSTS` 时**拒绝启动**；弹幕 cid 限纯数字；前端 `safeExternalUrl`/色值/`startSec` 收敛注入面；B站字幕加 10MB 上限；spawn 失败泄漏、ASR O(n²) 降频等修复。
+- **仓库卫生**：死代码（`filterByTimeRange`、幻影选项、`parseRelativeTime`、死三元/死条件/无用变量）已删；17,783 行假数据池移至 `archive/`（禁止重新接入）；`ytInitialData` 改括号匹配提取；`Math.min/max(...大数组)` 残留清零；geo `collectedAt` 不再冒充观测时刻；抖音开放接口关键词翻页明确拒绝（不再空成功）。
+- 仍未做：媒体代理全局带宽/字节预算、整任务磁盘预算、真实续页、地球 destroy/WebGL 释放、UI01–UI06、公网部署前置；抖音播放量维持止损。
+
+## 2026-10-23 记录：证据门禁 + 小红书核验 0%→100% + 索引性能 15x
 
 先读 [本轮接续](docs/HANDOFF_2026-10-23.md)，优先于下面所有旧轮次。基线 `48b6afb` / `origin/hotVideo`。
 
