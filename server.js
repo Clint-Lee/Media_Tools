@@ -70,6 +70,48 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api', accounts.sameOrigin);
 accounts.mount(app);
+
+// ── Badge 统一身份中心 SSO ────────────────────────────────────────────────────
+// 登录入口：/auth/badge → Badge 登录页 → 带一次性票据回到 /auth/badge/callback
+// → 服务端换票（Client Secret 只在服务端）→ 映射本站账号 → 建立本站会话。
+// 访客模式保持不变；本地账号登录 /api/auth/login 不受影响。
+const badgeSSO = require('./lib/badge-sso');
+const nodeCrypto = require('crypto');
+
+function readPlainCookie(req, name) {
+    return String(req.headers.cookie || '').split(';').map(v => v.trim())
+        .find(v => v.startsWith(name + '='))?.slice(name.length + 1) || '';
+}
+
+app.get('/auth/badge', (req, res) => {
+    const state = badgeSSO.createState();
+    res.cookie('hotpot_badge_state', state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000, path: '/' });
+    res.redirect(302, badgeSSO.loginUrl(state));
+});
+
+app.get('/auth/badge/callback', async (req, res) => {
+    const state = String(req.query.state || '');
+    const expected = readPlainCookie(req, 'hotpot_badge_state');
+    res.clearCookie('hotpot_badge_state', { path: '/' });
+    if (!badgeSSO.validState(expected, state)) {
+        return res.status(400).send('Badge 登录状态校验失败，请返回重新发起登录');
+    }
+    const ticket = String(req.query.ticket || '');
+    if (!ticket || ticket.length > 256) return res.status(400).send('缺少有效登录票据');
+    try {
+        const badgeData = await badgeSSO.exchangeTicket(ticket);
+        const localName = await badgeSSO.ensureLocalUser(badgeData.user);
+        const session = accounts.store.issue(localName);
+        res.cookie(accounts.SESSION_COOKIE, session.token, {
+            httpOnly: true, sameSite: 'strict', secure: req.secure, path: '/', maxAge: 2 * 86400000,
+        });
+        console.log('[Badge SSO] 统一登录成功: ' + localName);
+        res.redirect(302, '/');
+    } catch (error) {
+        console.warn('[Badge SSO] 登录失败: ' + error.message);
+        res.status(502).send('Badge 统一登录失败：' + error.message + '　<a href="/auth/badge">点击重试</a>');
+    }
+});
 app.get('/api/media/history',mediaAccess,(req,res)=>res.json({success:true,visitor:Boolean(req.user.guest),quota:req.user.quota,list:mediaStore(req.user.username).history(req.user.username)}));
 app.delete('/api/media/history/:id?',mediaAccess,(req,res)=>{mediaStore(req.user.username).clearHistory(req.user.username,req.params.id);res.json({success:true});});
 

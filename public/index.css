@@ -5268,3 +5268,20 @@ html, body {
 #system-status-body { overflow-y: auto; max-height: 70vh; }
 #system-status-body .source-check { padding: 12px 0; border-bottom: 1px solid #293344; }
 #system-status-body p, #benefits-modal p { line-height: 1.6; margin: 8px 0; color: #94a3b8; }
+
+/* ── Badge 统一登录入口 ── */
+.badge-sso-entry { margin-top: 14px; text-align: center; }
+.badge-sso-divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-muted, #64748b); font-size: 12px; margin: 12px 0;
+}
+.badge-sso-divider::before, .badge-sso-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border-color, #e2e8f0);
+}
+.badge-sso-btn {
+    display: flex; width: 100%; text-decoration: none; justify-content: center;
+    background: linear-gradient(135deg, #0d4739, #17735d) !important;
+    color: #fff !important; border: none;
+}
+.badge-sso-btn:hover { filter: brightness(1.1); }
+.badge-sso-note { display: block; margin-top: 8px; color: var(--text-light, #94a3b8); font-size: 11.5px; }
