@@ -904,6 +904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const original=video[prefix+'CountText'] || '',text=/^no views$/i.test(original)?'0':original.replace(/\s*(?:views?|likes?|comments?|shares?|次播放|次观看|播放|观看|点赞|评论|分享|收藏|赞)$/i,'');
         if(video[prefix+'Precision']==='lower-bound')return (text || video[prefix+'LowerBound']+'+')+'（仅下界）';
         if(value==null)return '未取得';
+        if(video[prefix+'Precision']==='estimated')return '≈'+formatHeat(value);
         return (video[prefix+'Precision']==='source-rounded'?'约 ':'')+(text || formatHeat(value));
     }
 
@@ -940,10 +941,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (state.sortBy!=='likes' && hasPlay) {
                 metricType = 'views';
-                metricLabel = '播放';
+                metricLabel = video.viewPrecision === 'estimated' ? '播放(预估)' : '播放';
                 metricIcon = 'fa-play';
                 displayMetric = metricText(video,'views');
-                statTooltip = (video.viewPrecision === 'source-rounded' ? '约 ' : '') + Number(video.playRaw).toLocaleString('zh-CN') + ' 真实播放'
+                statTooltip = video.viewPrecision === 'estimated'
+                    ? '≈' + Number(video.playRaw).toLocaleString('zh-CN') + ' 预估播放（平台不公开匿名播放计数，按真实点赞×互动率基准推算，非平台数据，仅供排序参考）'
+                    : (video.viewPrecision === 'source-rounded' ? '约 ' : '') + Number(video.playRaw).toLocaleString('zh-CN') + ' 真实播放'
                     + (video.viewPrecision==='unverified'?'（原始精度待核验）':'')
                     + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.viewSource || video.source || '平台公开数据')
                     + ((video.viewsFetchedAt || video.fetchedAt) ? ' · 观测 ' + new Date(video.viewsFetchedAt || video.fetchedAt).toLocaleString('zh-CN') : '');
@@ -1010,6 +1013,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${[['comments','评论','commentCount','comment'],['collects','收藏','collectCount','collect'],['shares','分享','shareCount','share']].some(([, ,key,prefix])=>video[key]!=null || video[prefix+'LowerBound']!=null)?'<div class="card-secondary-metric">'+[['comments','评论','commentCount','comment'],['collects','收藏','collectCount','collect'],['shares','分享','shareCount','share']].filter(([, ,key,prefix])=>video[key]!=null || video[prefix+'LowerBound']!=null).map(([kind,label])=>escapeHtml(metricText(video,kind))+' '+label).join(' · ')+'</div>':''}
                     ${video.lastSeenAt ? `<div class="card-collected-at">历史采集 · ${escapeHtml(new Date(video.lastSeenAt).toLocaleString('zh-CN'))}</div>` : ''}
                     ${video.viewPrecision === 'source-rounded' ? '<div class="card-collected-at">播放量为平台公开缩写，非精确整数</div>' : ''}
+                    ${video.viewPrecision === 'estimated' ? '<div class="card-collected-at">播放量为互动推算预估（非平台数据）</div>' : ''}
                     ${video.likePrecision === 'source-rounded' ? '<div class="card-collected-at">点赞为平台公开缩写，非精确整数</div>' : ''}
                     ${video.viewPrecision==='unverified' || video.likePrecision==='unverified'?'<div class="card-collected-at">旧记录未保留原始精度，待重新采集核验</div>':''}
                 </div>

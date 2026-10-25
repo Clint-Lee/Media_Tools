@@ -1,4 +1,16 @@
-# HotPot 当前交接与未完成项（2026-10-23 更新）
+# HotPot 当前交接与未完成项（2026-10-24 更新）
+
+## 2026-10-24 最新：全平台指标/翻页/解析下载实测接通（优先入口）
+
+先读 [本轮详档](docs/HANDOFF_2026-10-24.md)，优先于下面所有旧轮次。基线 `29fd1b6` / `origin/hotVideo`。
+
+- **7 平台榜单+播放+点赞全部接通**（逐平台 API 实测）：B站1338/1338、YouTube 20/20播放+20/20点赞、TikTok 47/47、X 64/64、快手20/20、抖音79/79、小红书16/16。
+- **抖音/小红书播放量为平台服务端隐藏**（第三方解析服务 douyin.wtf 实测同样只返回 null，快手详情 graphql 匿名要求 captcha）。按用户要求新增 `lib/estimated-views.js` 互动推算**预估播放**（卡片标"≈预估"，证据链带公式，`HOTPOT_ESTIMATED_VIEWS=0` 可关闭）。
+- **YouTube 修复三处**：① 点赞提取适配 2026-10 改版（accessibilityText 精确数 → 旧entity → 按钮title 降级），并修复"点赞永远赶不上响应组装"的时序缺陷（始终等待 enrich，内置8秒上限）；② 媒体任务改走 yt-dlp 下载（googlevideo 裸流限流 5KB/s/197KB断流，实测 232MB/68s），downloadStream 加 45 秒停滞看门狗+3次重试；③ 官方续页令牌翻页接通（P2 零重复）。
+- **抖音翻页接通**（放开"不支持第2页"，公开精选按页深滚动，P2 新增39条）。
+- **快手修复**：新 CDN 域名 ndcimgs.com 三处白名单 + manifest 备选流；匿名上下文风控积累后自动换新上下文重试×3。真实边界：部分作品匿名不可看（身份核验拒绝顶替）、详情 graphql 要 captcha（不绕过），可匿名观看作品下载 80.1MB 实测通过。
+- **小红书修复**：官方 http 流对已核验媒体域名升级 https，下载 1.8MB 实测通过。
+- `npm test` 全绿 EXIT 0；`npm run setup:media` 全新安装成功（venv+whisper-medium+Qwen，ASR ready）。E2E 脚本留档 `.cache/platform-sweep.js` 与 `.cache/e2e-yt-download.js`（后者必须传 mediaId 复用解析结果）。
 
 ## 2026-10-25 最新：测试禁网守卫 + 孤儿目录盘点 + 安全收尾（优先入口）
 

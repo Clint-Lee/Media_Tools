@@ -668,8 +668,9 @@ async function fetchYouTubeLive(options, fallbackError = null) {
 async function supplementPublicMetrics(result,options) {
     if(options.platform!=='youtube' || process.env.YOUTUBE_API_KEY)return result;
     const notes=require('./lib/youtube-public');
-    if(options.sortBy==='likes')await notes.enrich(result.list);
-    else notes.enrich(result.list).catch(()=>{});
+    // enrich 内部自带 8 秒等待上限：点赞只存在于 watch 详情，不等待则响应组装永远早于补全，
+    // 用户端将永远看到 0 点赞。等待对指标缓存（5分钟）命中的后续请求是零成本。
+    await notes.enrich(result.list);
     const list=notes.apply(result.list),pending=notes.pendingCount(result.list)>0,metricEnrichment=notes.status();
     let collection=result.collection;
     if(list.some((video,i)=>video!==result.list[i]))try {collection=require('./lib/collection-index').record('youtube',list,options);}

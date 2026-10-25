@@ -1,6 +1,6 @@
 # HotPot 项目与架构说明
 
-文档定稿：2026-10-23；代码审查日期2026-10-21，续查基线仍为`48b6afb`。本文说明现有结构，不是“全部功能已交付”清单。当前问题以 [根交接](HANDOFF.md) 和 [审查清单](docs/REVIEW_2026-10-21.md) 为准。
+文档定稿：2026-10-24。本文说明现有结构，不是“全部功能已交付”清单。当前问题与最新能力以 [根交接](HANDOFF.md) 和 [本轮详档](docs/HANDOFF_2026-10-24.md) 为准。
 
 ## 产品定义
 
@@ -37,12 +37,13 @@ HotPot（万热观象）面向视频创作者，聚合可访问的公开视频�
 |---|---|
 | `lib/live-sources.js` | 来源编排、真实快照、部分失败保留、分区/时效池、城市统计 |
 | `lib/platform-rankings.js`、各平台 `*-public/*-views/*-hotspot` | 作品结构适配、可选API、详情补充及来源范围 |
-| `lib/metric-evidence.js`、`lib/public-view-evidence.js` | 原计数、近似/下界、零占位、来源证据与拒绝原因 |
+| `lib/metric-evidence.js`、`lib/public-view-evidence.js` | 原计数、近似/下界/预估、零占位、来源证据与拒绝原因 |
+| `lib/estimated-views.js` | 抖音/小红书互动推算预估播放（平台隐藏该字段时按真实点赞×互动率基准，全程标 estimated，`HOTPOT_ESTIMATED_VIEWS=0` 关闭；绝不覆盖真实计数） |
 | `lib/video-pipeline.js`、`public/ranking.js` | 统一身份、时间筛选、去重、播放/点赞比较 |
 | `lib/collection-index.js` | 每平台最多50,000件的本机最新观测、备份与游标分页 |
 | `lib/geo-hotspots.js` | 从标题/描述/公开位置识别有限词表中的单个最佳城市关联 |
 
-10月23日已修YouTube新免Key路径的分类/计数/时效及两平台详情接线，新增共享有界详情队列；仍需实际原站验收、真正续页和指标就绪反馈。后续应复用统一管线，不再引入宽松数值解析或空结果补池。
+10月24日：YouTube 官方续页令牌翻页接通、点赞提取适配平台改版（accessibilityText 精确数→按钮title 降级）；抖音放开第2页深滚动；快手/小红书解析修复（新CDN域名、http流升级）。后续应复用统一管线，不再引入宽松数值解析或空结果补池。
 
 ### 媒体、账号与安全
 
@@ -54,13 +55,13 @@ HotPot（万热观象）面向视频创作者，聚合可访问的公开视频�
 | `lib/accounts.js`、`lib/guest-access.js` | 真实账号、HttpOnly会话、配额/预占、访客账本和历史隔离 |
 | `lib/safe-network.js`、`lib/platform-session.js` | URL/DNS/重定向保护、可选服务级凭证；非所有子进程出站均覆盖 |
 
-长任务预占、索引内到期目录、空会话和跨日桶已有最小修复；历史无索引orphan和公网资源控制仍待完成。2GB仍只是每下载stream限制，不是整任务或总盘预算。
+长任务预占、索引内到期目录、空会话和跨日桶已有最小修复；历史无索引orphan和公网资源控制仍待完成。2GB仍只是每下载stream限制，不是整任务或总盘预算。YouTube 媒体任务经 yt-dlp 下载（googlevideo 裸流限流），通用流下载带 45 秒停滞看门狗+重试；快手存在部分作品匿名不可看（如实报错，不顶替、不绕验证码）。
 
 ## 主要接口
 
 | 接口 | 用途 |
 |---|---|
-| `GET /api/trends`、`/api/search` | 实时来源样本，platform/category/timeRange/query/page/cursor，显式sort=views或likes |
+| `GET /api/trends`、`/api/search` | 实时来源样本，platform/category/timeRange/query/page/cursor，显式sort=views或likes；YouTube 支持官方续页令牌翻页 |
 | `GET /api/topics`、`/api/search-topic` | 已接通话题榜及关联作品；不是七平台都有话题接口 |
 | `GET /api/collected-videos` | 本机历史采集索引，游标绑定条件/版本 |
 | `GET /api/geo-hotspots` | 当前或已采集平台汇总的地名关联，不是来源定位 |
