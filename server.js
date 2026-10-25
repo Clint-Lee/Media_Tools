@@ -630,6 +630,17 @@ async function fetchYouTubeLive(options, fallbackError = null) {
 }
 
 async function supplementPublicMetrics(result,options) {
+    if(options.platform==='tiktok') {
+        // Apply after the source memo: completed detail work must reach ordinary cached responses.
+        const notes=require('./lib/tiktok-views');
+        notes.enrich(result.list).catch(()=>{});
+        const list=notes.apply(result.list),metricEnrichment=notes.status(),pending=metricEnrichment.pending>0;
+        let collection=result.collection;
+        if(list.some((video,i)=>video!==result.list[i]))try {collection=require('./lib/collection-index').record('tiktok',list,options);}
+        catch(error){collection={status:'write-failed',message:error.message};}
+        return {...result,list,collection,metricEnrichment,refreshing:Boolean(result.refreshing || pending),
+            message:result.message+(pending?' 匿名详情仍在有界补充，后续普通请求会应用已完成观测。':'')};
+    }
     if(options.platform!=='youtube' || process.env.YOUTUBE_API_KEY)return result;
     const notes=require('./lib/youtube-public');
     if(options.sortBy==='likes')await notes.enrich(result.list);

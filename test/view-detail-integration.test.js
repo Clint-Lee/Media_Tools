@@ -48,6 +48,15 @@ async function run() {
                 viewsFetchedAt: applied.viewsFetchedAt + 1, likesFetchedAt: applied.likesFetchedAt + 1 }])[0];
             assert.equal(newer.playRaw, 999, '旧详情缓存不能覆盖较新播放');
             assert.equal(newer.likeRaw, 99, '旧详情缓存不能覆盖较新点赞');
+            const withdrawn = client.apply([{ ...video, viewsFetchedAt: applied.viewsFetchedAt + 1,
+                likesFetchedAt: applied.likesFetchedAt + 1 }])[0];
+            assert.equal(withdrawn.playRaw, null, '明确更新的未知播放观测不能被旧详情复活');
+            assert.equal(withdrawn.likeRaw, null, '明确更新的未知点赞观测不能被旧详情复活');
+            assert.equal(withdrawn.viewsFetchedAt, applied.viewsFetchedAt + 1);
+            assert.equal(withdrawn.likesFetchedAt, applied.likesFetchedAt + 1);
+            const mixed = client.apply([{ ...video, viewsFetchedAt: applied.viewsFetchedAt + 1 }])[0];
+            assert.equal(mixed.playRaw, null, '播放新鲜度独立保留');
+            assert.equal(mixed.likeRaw, applied.likeRaw, '无点赞观测时间的未知值仍可由有效缓存补充');
             assert.equal(client.apply([{ ...video, fetchedAt: applied.viewsFetchedAt + 1 }])[0].viewsFetchedAt,
                 applied.viewsFetchedAt, '未知计数可补缓存，但必须显示缓存原观测时间');
         }
