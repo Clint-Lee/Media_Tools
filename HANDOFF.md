@@ -1,6 +1,16 @@
-# HotPot 当前交接与未完成项（2026-10-24 更新）
+# HotPot 当前交接与未完成项（2026-10-26 更新）
 
-## 2026-10-24 最新：全平台指标/翻页/解析下载实测接通（优先入口）
+## 2026-10-26 最新：抖音播放量终局 + 下载全平台实测 + LLM 降级修复（优先入口）
+
+先读 [本轮详档](docs/HANDOFF_2026-10-26.md)，优先于下面所有旧轮次。基线 `e0c3d8b` / `origin/hotVideo`。
+
+- **视频下载 7 平台逐平台 E2E 全部通过**（真实文件魔数校验）：抖音 36.6MB/11s、TikTok 4.9MB/4s、B站 25.1MB/4s（DASH 分轨合并）、快手 64.1MB/4s、小红书 4.3MB/4s、YouTube 177MB/124s、X 103MB/16s。
+- **抖音真实播放量：共 14 条免费路线全部实测排除，正式终局。** 本轮新增 4 条：① f2 的 `POST_STATS /aweme/v2/web/aweme/stats/`（参数不合法）；② detail + `uifid`+`verifyFp`+`fp`（403 Argus Sign Invalid）；③ 页面内 `byted_acrawler.frontierSign` 真实签名（签名成功、200、132KB，但 `play_count` 仍 0）；④ 移动端 H5 分享页 4 个入口（只显示"请在抖音内观看"）。**决定性旁证**：成熟开源库 `f2` 的 `filter.py` 把 play_count 提取器注释掉并写明"不从该接口获取"。保留三个真实路径：开放平台 hotsearch 凭证 / TikHub token（端点实测存在，401）/ 真实登录态钩子。
+- **修复一个真实缺陷：本地 LLM 因 WDAC 被阻止导致摘要降级。** 本机 `CodeIntegrityPolicyEnforcementStatus=2`，`process.dlopen` 直接验证 `llama-addon.node` 被 "An Application Control policy" 拦截（`ERR_DLOPEN_FAILED`）。`localAnalysis.available()` 只查文件存在所以返回 true，但 summarize 必失败，最终退化成"取最长句"的 extractive。新增 `lib/semantic-digest.js`（纯 JS TextRank：中文 2-gram + TF-IDF + PageRank + MMR 去冗余 + 9 类主题分类 + 关键词），改 `analyzeTranscript` 为四级降级（远程LLM→本地LLM→TextRank→摘录），每级失败降级不抛错。E2E 实测由 `analysis=extractive` 变为 `analysis=textrank`。
+- `npm test` **29 个入口全绿 EXIT 0**（新增 `semantic-digest.test.js` 7 组断言，挂禁网守卫）。
+- 抖音/小红书播放量维持 `estimated`（互动预估，卡片标"≈预估"+公式+可关闭），不伪造真实计数。
+
+## 2026-10-24 记录：全平台指标/翻页/解析下载实测接通
 
 先读 [本轮详档](docs/HANDOFF_2026-10-24.md)，优先于下面所有旧轮次。基线 `29fd1b6` / `origin/hotVideo`。
 

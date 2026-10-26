@@ -2448,7 +2448,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderAiInsights(aiData, videoData) {
             if (dom.mtAiCategory) dom.mtAiCategory.textContent = aiData?.category || '等待内容分析';
-            if (dom.mtAiAudience) dom.mtAiAudience.textContent = aiData ? (aiData.method === 'extractive' ? '真实字幕摘录' : '基于真实字幕的 AI 总结') : '分析尚未完成';
+            if (dom.mtAiAudience) dom.mtAiAudience.textContent = aiData ? (aiData.method === 'extractive' ? '真实字幕摘录' : aiData.method === 'textrank' ? '本地语义摘要（TextRank，无神经模型）' : '基于真实字幕的 AI 总结') : '分析尚未完成';
             if (dom.mtAiTrigger) dom.mtAiTrigger.textContent = aiData?.summary || '读取实际字幕或视频原声后，将显示视频讲了什么。';
             if (dom.mtAiHooks) {
                 const points = aiData?.keyPoints || [];
@@ -2519,7 +2519,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.aiAnalysis = job.analysis;
                 this.renderTranscript(job.transcript, data.title);
                 this.renderAiInsights(job.analysis, data);
-                if (status) status.textContent = (job.analysis?.method === 'extractive' ? '转写完成 · 原句摘录（非AI语义总结）' : '完成 · AI语义总结') + ' · ' + (job.transcript.source === 'platform-subtitles' ? '平台字幕' : '原声语音识别') + ' · ' + job.transcript.lineCount + '句' + (job.transcript.notice ? ' · ' + job.transcript.notice : '');
+                if (status) status.textContent = (job.analysis?.method === 'extractive' ? '转写完成 · 原句摘录（非AI语义总结）'
+                    : job.analysis?.method === 'textrank' ? '转写完成 · 本地语义摘要（TextRank，无神经模型）'
+                    : '完成 · AI语义总结') + ' · ' + (job.transcript.source === 'platform-subtitles' ? '平台字幕' : '原声语音识别') + ' · ' + job.transcript.lineCount + '句' + (job.transcript.notice ? ' · ' + job.transcript.notice : '');
                 if (job.accountWriteFailed) showToast('分析已完成，但账户配额/历史记录写入失败，请检查存储环境', 'warning');
                 initUserSession(); this.renderHistory();
             } catch (error) {
