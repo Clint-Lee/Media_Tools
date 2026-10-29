@@ -21,6 +21,7 @@ if (-not (Test-Path -LiteralPath $pythonExecutable)) {
     Run-Checked $uvExecutable @('venv',(Join-Path $runtimeRoot 'venv'),'--python','3.12','--managed-python','--cache-dir',(Join-Path $runtimeRoot 'uv-cache'))
 }
 Run-Checked $uvExecutable @('pip','install','--python',$pythonExecutable,'-r',(Join-Path $PSScriptRoot 'media-requirements.txt'),'--index-url','https://pypi.tuna.tsinghua.edu.cn/simple','--cache-dir',(Join-Path $runtimeRoot 'uv-cache'))
+Run-Checked 'powershell' @('-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'setup-ytdlp-js.ps1'))
 $llmRoot = Join-Path $runtimeRoot 'llm-node'
 Run-Checked 'npm.cmd' @('install','--prefix',$llmRoot,'--ignore-scripts','--omit=optional','node-llama-cpp@3.22.1','@node-llama-cpp/win-x64@3.22.1','--registry','https://registry.npmjs.org','--fetch-timeout=30000','--fetch-retries=1')
 

@@ -48,6 +48,10 @@ async function run() {
                 viewsFetchedAt: applied.viewsFetchedAt + 1, likesFetchedAt: applied.likesFetchedAt + 1 }])[0];
             assert.equal(newer.playRaw, 999, '旧详情缓存不能覆盖较新播放');
             assert.equal(newer.likeRaw, 99, '旧详情缓存不能覆盖较新点赞');
+            const hidden = client.apply([{ ...video, playRaw: null, likeRaw: null,
+                viewsFetchedAt: applied.viewsFetchedAt + 1, likesFetchedAt: applied.likesFetchedAt + 1 }])[0];
+            assert.equal(hidden.playRaw, null, '旧缓存不能复活较新的明确隐藏播放');
+            assert.equal(hidden.likeRaw, null, '旧缓存不能复活较新的明确隐藏点赞');
             assert.equal(client.apply([{ ...video, fetchedAt: applied.viewsFetchedAt + 1 }])[0].viewsFetchedAt,
                 applied.viewsFetchedAt, '未知计数可补缓存，但必须显示缓存原观测时间');
         }

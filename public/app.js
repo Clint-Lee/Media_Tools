@@ -945,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 metricIcon = 'fa-play';
                 displayMetric = metricText(video,'views');
                 statTooltip = video.viewPrecision === 'estimated'
-                    ? '≈' + Number(video.playRaw).toLocaleString('zh-CN') + ' 预估播放（平台不公开匿名播放计数，按真实点赞×互动率基准推算，非平台数据，仅供排序参考）'
+                    ? '≈' + Number(video.playRaw).toLocaleString('zh-CN') + ' 旧版实验预估（互动推算，非平台数据，不参与真实播放排名）'
                     : (video.viewPrecision === 'source-rounded' ? '约 ' : '') + Number(video.playRaw).toLocaleString('zh-CN') + ' 真实播放'
                     + (video.viewPrecision==='unverified'?'（原始精度待核验）':'')
                     + (video.partsCount > 1 ? '（作品所有分P累计）' : '') + ' · ' + (video.viewSource || video.source || '平台公开数据')
@@ -978,9 +978,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if((hasLikes || video.likeLowerBound!=null) && state.sortBy==='views')secondaryMetricHtml=`<div class="card-secondary-metric">${escapeHtml(metricText(video,'likes'))} 点赞 · 辅助指标，不用于播放排名</div>`;
             }
 
-            const rankBadgeTitle = state.sortBy==='views' && hasPlay
+            const rankBadgeTitle = state.sortBy==='views' && ranked
                 ? '当前已获取作品内真实播放量排名'
-                : (state.sortBy==='likes' && hasLikes ? '当前已获取作品内公开点赞排名' : '缺少当前指标，未参与排名');
+                : (state.sortBy==='likes' && ranked ? '当前已获取作品内公开点赞排名' : '缺少可核验的当前指标，未参与排名');
             const rankBadgeText = ranked ? rankIcon : video[(state.sortBy==='likes'?'like':'view')+'Precision']==='lower-bound'?'仅下界 · 未排名':state.sortBy==='likes'?'未入点赞榜':'未入播放榜';
             const coverUrl = getSafeCoverUrl(video);
 

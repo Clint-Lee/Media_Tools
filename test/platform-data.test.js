@@ -3,6 +3,7 @@
 const fs = require('fs'), path = require('path');
 const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:4000';
 const platforms = ['bilibili', 'douyin', 'youtube', 'tiktok', 'twitter', 'xiaohongshu', 'kuaishou'];
+const ranking = require('../public/ranking');
 
 (async () => {
     const report = { checkedAt: new Date().toISOString(), platforms: [] };
@@ -14,10 +15,11 @@ const platforms = ['bilibili', 'douyin', 'youtube', 'tiktok', 'twitter', 'xiaoho
             try {
                 const response = await fetch(base + '/api/trends?' + new URLSearchParams({ platform, category: 'all', timeRange: 'all', refresh: '1' }), { signal: AbortSignal.timeout(65000) });
                 const data = await response.json(), list = data.list || [];
-                const withViews = list.filter(v => Number.isFinite(v.playRaw) && v.playRaw >= 0).length;
+                const withViews = list.filter(v => ranking.count(v, 'views') !== null).length;
+                const estimatedViews = list.filter(v => v.viewPrecision === 'estimated' || v.viewEvidence?.status === 'estimated').length;
                 const metadata = list.filter(v => v.id && v.title && v.url && v.cover).length;
                 const freshVideos = list.filter(v => !v.isCached && v.fetchedAt >= started - 1000).length;
-                row = { platform, status: response.status, videos: list.length, withViews, withoutViews: list.length - withViews,
+                row = { platform, status: response.status, videos: list.length, withViews, estimatedViews, withoutViews: list.length - withViews,
                     completeMetadata: metadata, freshVideos, source: data.source, stale: Boolean(data.stale), partial: Boolean(data.partial),
                     passed: response.ok && data.success === true && list.length > 0 && withViews === list.length && metadata === list.length && freshVideos > 0,
                     message: data.message || data.sourceMessage || '' };

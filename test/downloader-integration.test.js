@@ -101,6 +101,7 @@ async function runDownloaderTests() {
                 title: '测试小红书视频',
                 desc: '视频描述文本',
                 type: 'video',
+                interactInfo: { likedCount: '1234', commentCount: 0, shareCount: 8, collectedCount: '20' },
                 user: { nickname: '测试博主', avatar: 'https://ci.xiaohongshu.com/avatar.jpg' },
                 imageList: [{ urlDefault: 'https://ci.xiaohongshu.com/cover.jpg' }],
                 video: {
@@ -122,6 +123,9 @@ async function runDownloaderTests() {
         assert.strictEqual(parsed.data.originDownloadVideoUrl, 'https://sns-video-hw.xhscdn.com/real.mp4');
         assert.ok(parsed.data.downloadVideoUrl.includes('/api/download?url='));
         assert.ok(parsed.data.playVideoUrl.includes('/api/play?url='));
+        assert.strictEqual(parsed.data.likeRaw, 1234, '笔记实际点赞不能在统一解析层丢失');
+        assert.strictEqual(parsed.data.commentCount, 0);
+        assert.strictEqual(parsed.data.playRaw, null, '只有互动数不能冒充播放');
 
         // Test image note
         redPublic.getWithBrowser = async () => ({

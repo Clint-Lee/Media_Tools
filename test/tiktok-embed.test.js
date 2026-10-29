@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { metadataFromEmbed, extractTikTokEmbed } = require('../lib/tiktok-embed');
 const id = '7664782256527002901', other = '7694271034731597089';
 const url = 'https://www.tiktok.com/@creator/video/' + id;
-const data = { itemInfos: { id, text: '真实公开作品', covers: ['https://p16.tiktokcdn-us.com/cover.jpg'], video: { urls: ['https://v19.tiktokcdn-us.com/video.mp4'], videoMeta: { duration: 12 } } }, authorInfos: { uniqueId: 'creator', nickName: '作者' } };
+const data = { itemInfos: { id, text: '真实公开作品', playCount: 123456789, diggCount: 1234, commentCount: 0, covers: ['https://p16.tiktokcdn-us.com/cover.jpg'], video: { urls: ['https://v19.tiktokcdn-us.com/video.mp4'], videoMeta: { duration: 12 } } }, authorInfos: { uniqueId: 'creator', nickName: '作者' } };
 const state = { source: { data: { ['/embed/v2/' + other]: { videoData: { ...data, itemInfos: { ...data.itemInfos, id: other } } }, ['/embed/v2/' + id]: { videoData: data } } } };
 const info = metadataFromEmbed(state, url);
 assert.equal(info.id, id);
@@ -32,6 +32,10 @@ for (const mediaUrl of ['http://127.0.0.1/video', 'https://tiktokcdn-us.com.evil
         assert.equal(parsed.data.originDownloadVideoUrl, info.url);
         assert.equal(parsed.data.httpHeaders['User-Agent'], 'original-public-user-agent');
         assert.equal(parsed.data.platform, 'tiktok');
+        assert.equal(parsed.data.playRaw, 123456789, '解析结果不能丢弃真实播放计数');
+        assert.equal(parsed.data.likeRaw, 1234);
+        assert.equal(parsed.data.commentCount, 0, '真实零评论不能变成未知');
+        assert.equal(parsed.data.viewEvidence.field, 'itemInfos.playCount');
         const short = 'https://vm.tiktok.com/isolated-share/';
         sources.withPage = async (platform, worker, options) => {
             assert.equal(options.anonymous, true);

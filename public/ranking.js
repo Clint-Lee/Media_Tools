@@ -5,6 +5,8 @@
     'use strict';
     function metric(value){return value==='likes'?'likes':'views';}
     function count(video,sortBy){
+        if(metric(sortBy)==='views' && (video.viewPrecision==='estimated' || video.viewEvidence?.status==='estimated'
+            || video.viewSource==='hotpot:engagement-estimate'))return null;
         const value=video[metric(sortBy)==='likes'?'likeRaw':'playRaw'];
         return Number.isSafeInteger(value) && value>=0?value:null;
     }

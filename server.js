@@ -666,6 +666,16 @@ async function fetchYouTubeLive(options, fallbackError = null) {
 }
 
 async function supplementPublicMetrics(result,options) {
+    if(options.platform==='tiktok') {
+        // memo 命中后也要回填已完成的详情；不能等下次全量采集才看到真实计数。
+        const notes=require('./lib/tiktok-views');
+        notes.enrich(result.list).catch(()=>{});
+        const list=notes.apply(result.list),metricEnrichment=notes.status();
+        let collection=result.collection;
+        if(list.some((video,i)=>video!==result.list[i]))try {collection=require('./lib/collection-index').record('tiktok',list,options);}
+        catch(error){collection={status:'write-failed',message:error.message};}
+        return {...result,list,collection,metricEnrichment,refreshing:result.refreshing || metricEnrichment.pending>0};
+    }
     if(options.platform!=='youtube' || process.env.YOUTUBE_API_KEY)return result;
     const notes=require('./lib/youtube-public');
     // enrich 内部自带 8 秒等待上限：点赞只存在于 watch 详情，不等待则响应组装永远早于补全，

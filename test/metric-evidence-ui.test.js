@@ -7,6 +7,7 @@ const rows=[
     {id:'rounded',...metricFields('views','10.5M'),...metricFields('likes','1.2万')},
     {id:'bound',...metricFields('views','1亿+'),...metricFields('likes','10万+')},
     {id:'unknown',playRaw:null,likeRaw:null},
+    {id:'estimated',playRaw:900000000,viewPrecision:'estimated',viewEvidence:{status:'estimated'},likeRaw:1},
     {id:'aggregate',playRaw:null,likeRaw:1047,viewEvidence:{status:'aggregate-interactions',reportedValue:1345}},
     {id:'placeholder',playRaw:null,likeRaw:158229,viewEvidence:{status:'placeholder-zero'}}
 ].map(v=>({...v,title:'隔离精度验证 '+v.id,platform:'bilibili',url:'https://www.bilibili.com/video/'+v.id,cover:'/cover-placeholder.svg',pubdate:1700000000,fetchedAt:Date.now(),source:'isolated-fixture',viewSource:'isolated-view-origin',viewsFetchedAt:1700000000000}));
@@ -33,6 +34,8 @@ const rows=[
         assert.equal(await page.$$eval('[data-video-id="unknown"] .card-secondary-metric',els=>els.length),0,'缺少互动不得显示伪造的零值');
         assert.ok((await page.$eval('[data-video-id="aggregate"] .card-stats',el=>el.title)).includes('点赞、收藏与评论合计'));
         assert.equal(await page.$eval('[data-video-id="aggregate"] .card-rank',el=>el.textContent),'未入播放榜');
+        assert.equal(await page.$eval('[data-video-id="estimated"] .card-rank',el=>el.textContent),'未入播放榜','旧预估不能获得真实播放名次');
+        assert.ok(!(await page.$eval('[data-video-id="estimated"] .card-rank',el=>el.title)).includes('真实播放量排名'));
         assert.ok((await page.$eval('[data-video-id="placeholder"] .card-stats',el=>el.title)).includes('零占位'));
         assert.ok((await page.$eval('#ranking-scope',el=>el.textContent)).includes('排序近似'));
         await page.select('#ranking-metric','likes');

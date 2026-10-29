@@ -1,6 +1,6 @@
 # HotPot 项目与架构说明
 
-文档定稿：2026-10-24。本文说明现有结构，不是“全部功能已交付”清单。当前问题与最新能力以 [根交接](HANDOFF.md) 和 [本轮详档](docs/HANDOFF_2026-10-24.md) 为准。
+文档更新：2026-10-29。本文说明现有结构，不是“全部功能已交付”清单。当前问题与最新能力以 [根交接](HANDOFF.md) 和 [本轮详档](docs/HANDOFF_2026-10-29.md) 为准。
 
 ## 产品定义
 
@@ -13,8 +13,8 @@ HotPot（万热观象）面向视频创作者，聚合可访问的公开视频�
 - Node.js / Express 单进程服务；Axios、Puppeteer处理HTTP与正常浏览器公开访问。
 - 原生 HTML/CSS/JavaScript 前端，无Vue/React构建链；`public/app.js`约3,179行，`index.css`约5,270行。
 - Globe.gl / Three.js 本地UMD地球，Natural Earth国家面、有限城市词表，可选OSM/Esri瓦片。
-- Python媒体工具链：yt-dlp元数据、FFmpeg音画封装/音频转换、faster-whisper原声ASR。
-- 本地node-llama-cpp / Qwen语义总结，或运营者配置的远端兼容服务；失败可降级原句摘录。
+- Python媒体工具链：yt-dlp元数据与YouTube实际下载、FFmpeg音画封装/音频转换、faster-whisper原声ASR；Windows可使用项目专用Node24执行YouTube EJS。
+- 本地node-llama-cpp / Qwen语义总结，或运营者配置的远端兼容服务；失败降级TextRank抽取摘要，再降级原句摘录，均保留实际方法标记。
 - 私有JSON账号/索引/任务存储与进程内访客账本，没有数据库事务、分布式任务队列或多实例协调。
 
 `lib/env.js`的Node 20.12下限只是配置加载要求。生产运行时应另选并验收受支持LTS，详见 [部署文档](docs/DEPLOYMENT.md)。

@@ -1,4 +1,17 @@
-# HotPot 当前交接与未完成项（2026-10-26 更新）
+# HotPot 当前交接与未完成项（2026-10-29 更新）
+
+## 当前入口：新目录、真实指标修复与开源方案核验
+
+**优先阅读 [2026-10-29 接续](docs/HANDOFF_2026-10-29.md)。** 当前项目位于 `D:\Extends\antigravityProj\MediaTools\Media_Tools`；Git origin 已切换为 `https://github.com/Clint-Lee/Media_Tools.git`。基线 `9d9df6e`，保留原 `hotVideo` 分支。
+
+- 默认关闭“点赞×固定倍数”的互动预估；历史预估也不能进入真实播放名次/覆盖率。旧文档里抖音、小红书“播放全部接通”的表述不是实际播放量验收。
+- 下载统一解析现在保留原站/yt-dlp 的实际计数；TikTok 支持 statsV2 字符串整数，并在普通缓存请求中回填已完成的详情。
+- 修复播放与点赞独立观测合并、旧详情复活较新明确 null、YouTube 合并没有传项目 FFmpeg 路径等问题。
+- 已研究指定 yt-dlp、Galaxy 网站及其桌面端实际源码；新增原画 key 回退、运行时选择及分块下载。没有把第三方公共解析站设成默认生产依赖，没有复制限制性许可证的实现。
+- 新目录重建了 Python 媒体环境、安装项目专用 Node 24，并复制/校验旧目录已有的 Whisper 模型；这些属于被忽略的本机运行时，不会随 Git 自动到另一台机器。
+- 真实播放未补齐的平台仍是抖音、小红书；继续研究具体端点/权限和可复现响应，不能把“终局”或仓库支持下载当作所有计数已解决。
+
+下面各节保留为历史过程，冲突时以本节、10-29 详档及实际代码为准。历史样本成功不保证当前所有作品成功。
 
 ## 2026-10-26 最新：抖音播放量终局 + 下载全平台实测 + LLM 降级修复（优先入口）
 
@@ -82,15 +95,15 @@
 ## 2026-10-18 接续与修复历史
 
 1. **YouTube 匿名原站详情指标补充（免 Key 精确播放与点赞）**：
-   - 实现 [lib/youtube-public.js](file:///d:/Extends/antigravityProj/HotPot/lib/youtube-public.js)，在无 YouTube Data API Key 情况下，通过匿名抓取 watch 页面获取真实 `viewCount` 与 `likeCount`。
+   - 实现 [lib/youtube-public.js](lib/youtube-public.js)，在无 YouTube Data API Key 情况下，通过匿名抓取 watch 页面获取真实 `viewCount` 与 `likeCount`。
    - 精确区分 `likeCountEntity` 中的真实点赞 `likeCountIfIndifferentNumber`，避免误取包含 +1 预期的 `likeCountIfLikedNumber`。
-   - 接入 [server.js](file:///d:/Extends/antigravityProj/HotPot/server.js) 的 `supplementPublicMetrics`，并发受控（最多 4 并发，每视频最长 3500ms 超时），默认不阻塞首屏。
-   - [test/youtube-public.test.js](file:///d:/Extends/antigravityProj/HotPot/test/youtube-public.test.js) 单元测试全部通过。
+   - 接入 [server.js](server.js) 的 `supplementPublicMetrics`，并发受控（最多 4 并发，每视频最长 3500ms 超时），默认不阻塞首屏。
+   - [test/youtube-public.test.js](test/youtube-public.test.js) 单元测试全部通过。
 
 2. **小红书解析器修复与真实媒体响应验证（Downloader Core）**：
-   - 增强 [lib/red-public.js](file:///d:/Extends/antigravityProj/HotPot/lib/red-public.js) 的 `videoUrl` 提取逻辑：全面支持小红书原站返回的 `EF4`（AVC/H.264）、`EF5`（HEVC/H.265）、`EF6`（AV1/HDR）编码分组，支持 `master_url`/`masterUrl`、`main_url`/`mainUrl` 以及 `backup_urls`/`backupUrls` 候选地址，支持媒体对象直接挂载于 `note.video` 或 `note.media`，支持 `xiaohongshu.com` 与 `xhscdn.com` 官方 CDN 媒体域名。
-   - 在 [lib/downloader-core.js](file:///d:/Extends/antigravityProj/HotPot/lib/downloader-core.js) 的 `parseXiaohongshu` 中增加真实媒体响应核验 `verifyXiaohongshuMedia`：通过 HEAD 或小片段 Range GET 探测实际媒体流响应，严格验证 Content-Type（非 HTML/JSON 防爬验证页）与状态码 200/206，杜绝仅凭 JSON 字段“解析成功”即算通过的假成功。
-   - [test/media-identity.test.js](file:///d:/Extends/antigravityProj/HotPot/test/media-identity.test.js) 增加 EF5 回退、backup_urls、直接挂载 stream 与官方域名断言；[test/downloader-integration.test.js](file:///d:/Extends/antigravityProj/HotPot/test/downloader-integration.test.js) 增加真实 HTTP 探测校验（正常视频流、防爬 HTML 拦截拦截、403 拒绝）与端到端解析集成测试，全部通过。
+   - 增强 [lib/red-public.js](lib/red-public.js) 的 `videoUrl` 提取逻辑：全面支持小红书原站返回的 `EF4`（AVC/H.264）、`EF5`（HEVC/H.265）、`EF6`（AV1/HDR）编码分组，支持 `master_url`/`masterUrl`、`main_url`/`mainUrl` 以及 `backup_urls`/`backupUrls` 候选地址，支持媒体对象直接挂载于 `note.video` 或 `note.media`，支持 `xiaohongshu.com` 与 `xhscdn.com` 官方 CDN 媒体域名。
+   - 在 [lib/downloader-core.js](lib/downloader-core.js) 的 `parseXiaohongshu` 中增加真实媒体响应核验 `verifyXiaohongshuMedia`：通过 HEAD 或小片段 Range GET 探测实际媒体流响应，严格验证 Content-Type（非 HTML/JSON 防爬验证页）与状态码 200/206，杜绝仅凭 JSON 字段“解析成功”即算通过的假成功。
+   - [test/media-identity.test.js](test/media-identity.test.js) 增加 EF5 回退、backup_urls、直接挂载 stream 与官方域名断言；[test/downloader-integration.test.js](test/downloader-integration.test.js) 增加真实 HTTP 探测校验（正常视频流、防爬 HTML 拦截拦截、403 拒绝）与端到端解析集成测试，全部通过。
 
 3. **系统回归与验证**：
    - `npm test`（全 20 组测试套件）100% 全部通过。
