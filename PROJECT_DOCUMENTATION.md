@@ -38,7 +38,7 @@ HotPot（万热观象）面向视频创作者，聚合可访问的公开视频�
 | `lib/live-sources.js` | 来源编排、真实快照、部分失败保留、分区/时效池、城市统计 |
 | `lib/platform-rankings.js`、各平台 `*-public/*-views/*-hotspot` | 作品结构适配、可选API、详情补充及来源范围 |
 | `lib/metric-evidence.js`、`lib/public-view-evidence.js` | 原计数、近似/下界/预估、零占位、来源证据与拒绝原因 |
-| `lib/estimated-views.js` | 抖音/小红书互动推算预估播放（平台隐藏该字段时按真实点赞×互动率基准，全程标 estimated，`HOTPOT_ESTIMATED_VIEWS=0` 关闭；绝不覆盖真实计数） |
+| `lib/estimated-views.js` | 旧版互动推算实验，默认关闭；显式设1也仅作预估展示，不进入真实播放名次和覆盖率 |
 | `lib/video-pipeline.js`、`public/ranking.js` | 统一身份、时间筛选、去重、播放/点赞比较 |
 | `lib/collection-index.js` | 每平台最多50,000件的本机最新观测、备份与游标分页 |
 | `lib/geo-hotspots.js` | 从标题/描述/公开位置识别有限词表中的单个最佳城市关联 |
@@ -50,12 +50,13 @@ HotPot（万热观象）面向视频创作者，聚合可访问的公开视频�
 | 入口 | 负责内容及边界 |
 |---|---|
 | `lib/downloader-core.js`、`lib/media-identity.js` | 原链接、作品ID与实际媒体匹配；小红书多编码与媒体响应核验 |
+| `lib/media-metrics.js`、`lib/yt-dlp-parser.js` | 统一解析的实际计数/精度/来源、X曝光隔离、可选匿名元数据模式及JS运行时/代理参数 |
 | `lib/media-jobs.js` | 单并发任务、平台字幕/ASR、封装、MP3、结果所有权和临时索引 |
 | `lib/transcript-content.js`、`lib/transcript-analyzer.js`、`lib/local-analysis.js` | 字幕时间轴、原句依据、语义总结和明确降级；不包含视觉/OCR分析 |
 | `lib/accounts.js`、`lib/guest-access.js` | 真实账号、HttpOnly会话、配额/预占、访客账本和历史隔离 |
 | `lib/safe-network.js`、`lib/platform-session.js` | URL/DNS/重定向保护、可选服务级凭证；非所有子进程出站均覆盖 |
 
-长任务预占、索引内到期目录、空会话和跨日桶已有最小修复；历史无索引orphan和公网资源控制仍待完成。2GB仍只是每下载stream限制，不是整任务或总盘预算。YouTube 媒体任务经 yt-dlp 下载（googlevideo 裸流限流），通用流下载带 45 秒停滞看门狗+重试；快手存在部分作品匿名不可看（如实报错，不顶替、不绕验证码）。
+长任务预占、索引内到期目录、受控无索引孤儿目录清理、空会话和跨日桶已有回归；公网资源控制仍待完成。2GiB是流/单文件限制（含yt-dlp声明），不是整任务或总盘预算。YouTube媒体经yt-dlp下载并传入项目FFmpeg路径，通用流下载带45秒停滞看门狗和重试；快手部分作品匿名不可看时如实报错，不顶替、不绕验证码。
 
 ## 主要接口
 
@@ -81,4 +82,4 @@ HotPot（万热观象）面向视频创作者，聚合可访问的公开视频�
 4. 公网前补共享状态设计、资源预算与出站隔离；当前先只运行一个实例。
 5. 地球增加匹配原文、置信度、未定位比例和城市作品下钻；不把坐标可视化当成定位证明。
 
-根目录旧素材池JSON、历史试验脚本和 `lib/category-fallback-pool.js` 不应重新接入生产作为“视频不足兜底”。整理删除这些历史资产需单独确认引用与价值，本次未删除。
+`archive/`中的旧素材池及历史试验资产不应重新接入生产作为“视频不足兜底”。保留可核验来源，不用固定视频或跨分类素材填充空结果。新设备与运维步骤见[运行说明](docs/OPERATIONS.md)。
