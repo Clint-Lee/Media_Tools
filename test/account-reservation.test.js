@@ -29,7 +29,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../lib/accounts.js'),'ut
     now += 31 * 60 * 1000;
     store.settle(failed, false);
     assert.equal(store.publicUser(store.read().users[0]).quota.used, 1, 'failed long task refunds');
-    const fullQueue = Array.from({length:19}, () => store.reserve('alice', 'queued'));
+    const fullQueue = Array.from({length:9}, () => store.reserve('alice', 'queued'));
     now += 31 * 60 * 1000;
     assert.throws(() => store.reserve('alice', 'over-limit'), error => error.status === 429, 'aged live queue still holds quota');
     for (const pending of fullQueue) store.settle(pending, false);

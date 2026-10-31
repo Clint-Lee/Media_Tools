@@ -27,6 +27,8 @@ const {
 axios.defaults.proxy = false;
 
 const app = express();
+// Only the local reverse proxy may supply client IP and HTTPS state.
+app.set('trust proxy', 'loopback');
 const PORT = process.env.PORT || 4000;
 const globeDistDir = path.dirname(require.resolve('globe.gl'));
 const threeGlobeAssetsDir = path.join(globeDistDir, '..', '..', 'three-globe', 'example', 'img');
@@ -85,14 +87,14 @@ function readPlainCookie(req, name) {
 
 app.get('/auth/badge', (req, res) => {
     const state = badgeSSO.createState();
-    res.cookie('hotpot_badge_state', state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000, path: '/' });
+    res.cookie('hotpot_badge_state', state, { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 10 * 60 * 1000, path: '/' });
     res.redirect(302, badgeSSO.loginUrl(state));
 });
 
 app.get('/auth/badge/callback', async (req, res) => {
     const state = String(req.query.state || '');
     const expected = readPlainCookie(req, 'hotpot_badge_state');
-    res.clearCookie('hotpot_badge_state', { path: '/' });
+    res.clearCookie('hotpot_badge_state', { path: '/', httpOnly: true, sameSite: 'lax', secure: req.secure });
     if (!badgeSSO.validState(expected, state)) {
         return res.status(400).send('Badge 登录状态校验失败，请返回重新发起登录');
     }

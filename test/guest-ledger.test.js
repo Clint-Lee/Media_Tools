@@ -1,5 +1,5 @@
 'use strict';
-const assert=require('node:assert/strict'),{createStore,IP_LIMIT}=require('../lib/guest-access');
+const assert=require('node:assert/strict'),{createStore,LIMIT,IP_LIMIT}=require('../lib/guest-access');
 const realNow=Date.now;let time=Date.parse('2026-10-22T15:59:00Z');Date.now=()=>time;
 try {
     const ledger=createStore();
@@ -8,7 +8,7 @@ try {
     for(let i=0;i<IP_LIMIT-1;i++) {const owner='old-'+i;ledger.connect(owner,'shared-ip');ledger.settle(ledger.reserve(owner,'old'),true);}
     assert.throws(()=>ledger.reserve('running','exhausted'),error=>error.status===429);
     time+=120000; // Shanghai midnight, while yesterday's task is still active.
-    ledger.connect('new','shared-ip');assert.equal(ledger.quota('new').remaining,20);
+    ledger.connect('new','shared-ip');assert.equal(ledger.quota('new').remaining,LIMIT);
     const next=ledger.reserve('new','new-day');
     assert.equal(ledger.quota('running').used,0);assert.equal(ledger.quota('running').pending,0);
     ledger.settle(running,true);ledger.settle(running,true);
