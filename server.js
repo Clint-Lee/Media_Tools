@@ -102,6 +102,15 @@ app.get('/auth/badge/callback', async (req, res) => {
         const badgeData = await badgeSSO.exchangeTicket(ticket);
         const localName = await badgeSSO.ensureLocalUser(badgeData.user);
         const session = accounts.store.issue(localName);
+        accounts.store.log(localName, {
+            kind: 'login',
+            status: 'success',
+            source: 'badge_sso',
+            badgeUserId: badgeData.user.userId,
+            appRole: badgeData.user.appRole || 'MEMBER',
+            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+            userAgent: req.headers['user-agent']
+        });
         res.cookie(accounts.SESSION_COOKIE, session.token, {
             httpOnly: true, sameSite: 'strict', secure: req.secure, path: '/', maxAge: 2 * 86400000,
         });
@@ -311,9 +320,9 @@ app.get('/api/download', mediaAccess, async (req, res) => {
         res.on('finish', () => {
             const isTruncated = expectedBytes && bytesReceived < expectedBytes;
             if (res.statusCode < 400 && !streamFailed && !isTruncated) {
-                logTransfer(req.user.username, { kind: 'direct-download', status: 'sent', url: '', title: safeFilename });
+                logTransfer(req.user.username, { kind: 'download', status: 'sent', url: targetUrl, title: safeFilename });
             } else if (streamFailed || isTruncated) {
-                logTransfer(req.user.username, { kind: 'direct-download', status: 'interrupted', url: '', title: safeFilename, message: '上游传输中断或未完成' });
+                logTransfer(req.user.username, { kind: 'download', status: 'interrupted', url: targetUrl, title: safeFilename, message: '上游传输中断或未完成' });
             }
         });
 
