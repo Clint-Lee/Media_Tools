@@ -267,6 +267,17 @@ app.get('/api/download', mediaAccess, async (req, res) => {
         } catch {}
     }
 
+    // 检查并预占下载额度（游客每日3次，普通用户10次，VIP 100次，SuperVIP 无限）
+    let reservation = null;
+    try {
+        reservation = mediaStore(req.user.username).reserve(req.user.username, 'download');
+    } catch (err) {
+        const errorMsg = req.user.guest
+            ? '【额度限制】未登录访客基于设备指纹每日仅享 3 次免费下载！请点击页面登录通过 Badge 统一登录，立即解锁单日 10 次及更多高级功能。'
+            : '【额度限制】今日免费下载与处理额度已用完（普通用户单日 10 次）！升级 VIP 可享 100 次，SuperVIP 享有无限制下载。';
+        return res.status(429).send(errorMsg);
+    }
+
     try {
         parseExternalUrl(targetUrl);
         const upstreamHeaders = resolveAntiHotlinkingHeaders(targetUrl, customReferer);
@@ -319,10 +330,19 @@ app.get('/api/download', mediaAccess, async (req, res) => {
 
         res.on('finish', () => {
             const isTruncated = expectedBytes && bytesReceived < expectedBytes;
-            if (res.statusCode < 400 && !streamFailed && !isTruncated) {
+            const success = res.statusCode < 400 && !streamFailed && !isTruncated;
+            if (reservation) {
+                try { mediaStore(req.user.username).settle(reservation, success); } catch {}
+            }
+            if (success) {
                 logTransfer(req.user.username, { kind: 'download', status: 'sent', url: targetUrl, title: safeFilename });
             } else if (streamFailed || isTruncated) {
                 logTransfer(req.user.username, { kind: 'download', status: 'interrupted', url: targetUrl, title: safeFilename, message: '上游传输中断或未完成' });
+            }
+        });
+        res.on('close', () => {
+            if (!res.writableEnded && reservation) {
+                try { mediaStore(req.user.username).settle(reservation, false); } catch {}
             }
         });
 
